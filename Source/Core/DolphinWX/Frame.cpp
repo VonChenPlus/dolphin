@@ -846,6 +846,7 @@ void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
 		SConfig::GetInstance().m_ListAustralia &&
 		SConfig::GetInstance().m_ListFrance &&
 		SConfig::GetInstance().m_ListGermany &&
+		SConfig::GetInstance().m_ListInternational &&
 		SConfig::GetInstance().m_ListItaly &&
 		SConfig::GetInstance().m_ListKorea &&
 		SConfig::GetInstance().m_ListNetherlands &&
@@ -863,6 +864,7 @@ void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
 		SConfig::GetInstance().m_ListAustralia =
 		SConfig::GetInstance().m_ListFrance =
 		SConfig::GetInstance().m_ListGermany =
+		SConfig::GetInstance().m_ListInternational =
 		SConfig::GetInstance().m_ListItaly =
 		SConfig::GetInstance().m_ListKorea =
 		SConfig::GetInstance().m_ListNetherlands =
@@ -880,6 +882,7 @@ void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
 		GetMenuBar()->FindItem(IDM_LIST_AUSTRALIA)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_FRANCE)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_GERMANY)->Check(true);
+		GetMenuBar()->FindItem(IDM_LIST_INTERNATIONAL)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_ITALY)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_KOREA)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_NETHERLANDS)->Check(true);
@@ -983,8 +986,8 @@ int GetCmdForHotkey(unsigned int key)
 	case HK_SAVE_STATE_SLOT_SELECTED: return IDM_SAVE_SELECTED_SLOT;
 	case HK_LOAD_STATE_SLOT_SELECTED: return IDM_LOAD_SELECTED_SLOT;
 
-	case HK_FREELOOK_INCREASE_SPEED: return IDM_FREELOOK_INCREASE_SPEED;
 	case HK_FREELOOK_DECREASE_SPEED: return IDM_FREELOOK_DECREASE_SPEED;
+	case HK_FREELOOK_INCREASE_SPEED: return IDM_FREELOOK_INCREASE_SPEED;
 	case HK_FREELOOK_RESET_SPEED: return IDM_FREELOOK_RESET_SPEED;
 	case HK_FREELOOK_LEFT: return IDM_FREELOOK_LEFT;
 	case HK_FREELOOK_RIGHT: return IDM_FREELOOK_RIGHT;
@@ -1066,10 +1069,10 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 			Core::SaveScreenShot();
 		else if (IsHotkey(event, HK_EXIT))
 			wxPostEvent(this, wxCommandEvent(wxID_EXIT));
-		else if (IsHotkey(event, HK_VOLUME_UP))
-			AudioCommon::IncreaseVolume(3);
 		else if (IsHotkey(event, HK_VOLUME_DOWN))
 			AudioCommon::DecreaseVolume(3);
+		else if (IsHotkey(event, HK_VOLUME_UP))
+			AudioCommon::IncreaseVolume(3);
 		else if (IsHotkey(event, HK_VOLUME_TOGGLE_MUTE))
 			AudioCommon::ToggleMuteVolume();
 		// Wiimote connect and disconnect hotkeys
@@ -1118,15 +1121,15 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 		{
 			Core::SetIsFramelimiterTempDisabled(true);
 		}
-		else if (IsHotkey(event, HK_INCREASE_FRAME_LIMIT))
-		{
-			if (++SConfig::GetInstance().m_Framelimit > 0x19)
-				SConfig::GetInstance().m_Framelimit = 0;
-		}
 		else if (IsHotkey(event, HK_DECREASE_FRAME_LIMIT))
 		{
 			if (--SConfig::GetInstance().m_Framelimit > 0x19)
 				SConfig::GetInstance().m_Framelimit = 0x19;
+		}
+		else if (IsHotkey(event, HK_INCREASE_FRAME_LIMIT))
+		{
+			if (++SConfig::GetInstance().m_Framelimit > 0x19)
+				SConfig::GetInstance().m_Framelimit = 0;
 		}
 		else if (IsHotkey(event, HK_SAVE_STATE_SLOT_SELECTED))
 		{
@@ -1136,25 +1139,25 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 		{
 			State::Load(g_saveSlot);
 		}
-		else if (IsHotkey(event, HK_INCREASE_DEPTH))
-		{
-			if (++g_Config.iStereoDepth > 100)
-				g_Config.iStereoDepth = 100;
-		}
 		else if (IsHotkey(event, HK_DECREASE_DEPTH))
 		{
 			if (--g_Config.iStereoDepth < 0)
 				g_Config.iStereoDepth = 0;
 		}
-		else if (IsHotkey(event, HK_INCREASE_CONVERGENCE))
+		else if (IsHotkey(event, HK_INCREASE_DEPTH))
 		{
-			if (++g_Config.iStereoConvergence > 500)
-				g_Config.iStereoConvergence = 500;
+			if (++g_Config.iStereoDepth > 100)
+				g_Config.iStereoDepth = 100;
 		}
 		else if (IsHotkey(event, HK_DECREASE_CONVERGENCE))
 		{
 			if (--g_Config.iStereoConvergence < 0)
 				g_Config.iStereoConvergence = 0;
+		}
+		else if (IsHotkey(event, HK_INCREASE_CONVERGENCE))
+		{
+			if (++g_Config.iStereoConvergence > 500)
+				g_Config.iStereoConvergence = 500;
 		}
 
 		else
@@ -1195,7 +1198,7 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 			// On OS X, we claim all keyboard events while
 			// emulation is running to avoid wxWidgets sounding
 			// the system beep for unhandled key events when
-			// receiving pad/wiimote keypresses which take an
+			// receiving pad/Wiimote keypresses which take an
 			// entirely different path through the HID subsystem.
 #ifndef __APPLE__
 			// On other platforms, we leave the key event alone
@@ -1205,7 +1208,7 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 #endif
 		}
 
-		// Actually perform the wiimote connection or disconnection
+		// Actually perform the Wiimote connection or disconnection
 		if (WiimoteId >= 0)
 		{
 			wxCommandEvent evt;
@@ -1217,10 +1220,10 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 		{
 			static float debugSpeed = 1.0f;
 
-			if (IsHotkey(event, HK_FREELOOK_INCREASE_SPEED))
-				debugSpeed *= 2.0f;
-			else if (IsHotkey(event, HK_FREELOOK_DECREASE_SPEED))
+			if (IsHotkey(event, HK_FREELOOK_DECREASE_SPEED))
 				debugSpeed /= 2.0f;
+			else if (IsHotkey(event, HK_FREELOOK_INCREASE_SPEED))
+				debugSpeed *= 2.0f;
 			else if (IsHotkey(event, HK_FREELOOK_RESET_SPEED))
 				debugSpeed = 1.0f;
 			else if (IsHotkey(event, HK_FREELOOK_UP))

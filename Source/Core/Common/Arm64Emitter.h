@@ -478,10 +478,10 @@ public:
 	void MSUB(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra);
 	void SMADDL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra);
 	void SMSUBL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra);
-	void SMULH(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra);
+	void SMULH(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
 	void UMADDL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra);
 	void UMSUBL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra);
-	void UMULH(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra);
+	void UMULH(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
 	void MUL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
 	void MNEG(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
 
@@ -597,6 +597,29 @@ public:
 	// ABI related
 	void ABI_PushRegisters(BitSet32 registers);
 	void ABI_PopRegisters(BitSet32 registers, BitSet32 ignore_mask = BitSet32(0));
+
+	// Utility to generate a call to a std::function object.
+	//
+	// Unfortunately, calling operator() directly is undefined behavior in C++
+	// (this method might be a thunk in the case of multi-inheritance) so we
+	// have to go through a trampoline function.
+	template <typename T, typename... Args>
+	static void CallLambdaTrampoline(const std::function<T(Args...)>* f,
+	                                 Args... args)
+	{
+		(*f)(args...);
+	}
+
+	// This function expects you to have set up the state.
+	// Overwrites X0 and X30
+	template <typename T, typename... Args>
+	ARM64Reg ABI_SetupLambda(const std::function<T(Args...)>* f)
+	{
+		auto trampoline = &ARM64XEmitter::CallLambdaTrampoline<T, Args...>;
+		MOVI2R(X30, (u64)trampoline);
+		MOVI2R(X0, (u64)const_cast<void*>((const void*)f));
+		return X30;
+	}
 };
 
 class ARM64FloatEmitter
@@ -617,8 +640,14 @@ public:
 	// Loadstore multiple structure
 	void LD1(u8 size, u8 count, ARM64Reg Rt, ARM64Reg Rn);
 
+	// Scalar - 1 Source
+	void FABS(ARM64Reg Rd, ARM64Reg Rn);
+	void FNEG(ARM64Reg Rd, ARM64Reg Rn);
+
 	// Scalar - 2 Source
+	void FADD(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
 	void FMUL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
+	void FSUB(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
 
 	// Scalar floating point immediate
 	void FMOV(ARM64Reg Rd, u32 imm);
@@ -718,6 +747,7 @@ private:
 	void EmitScalarImm(bool M, bool S, u32 type, u32 imm5, ARM64Reg Rd, u32 imm);
 	void EmitShiftImm(bool U, u32 immh, u32 immb, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
 	void EmitLoadStoreMultipleStructure(u32 size, bool L, u32 opcode, ARM64Reg Rt, ARM64Reg Rn);
+	void EmitScalar1Source(bool M, bool S, u32 type, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
 };
 
 class ARM64CodeBlock : public CodeBlock<ARM64XEmitter>

@@ -240,6 +240,10 @@ void Wiimote::Reset()
 		delete[] m_read_requests.front().data;
 		m_read_requests.pop();
 	}
+
+	// Yamaha ADPCM state initialize
+	m_adpcm_state.predictor = 0;
+	m_adpcm_state.step = 127;
 }
 
 Wiimote::Wiimote( const unsigned int index )
@@ -338,17 +342,17 @@ bool Wiimote::Step()
 			m_read_requests.pop();
 		}
 
-		// dont send any other reports
+		// don't send any other reports
 		return true;
 	}
 
 	// check if a status report needs to be sent
-	// this happens on wiimote sync and when extensions are switched
+	// this happens on Wiimote sync and when extensions are switched
 	if (m_extension->active_extension != m_extension->switch_extension)
 	{
 		RequestStatus();
 
-		// Wiibrew: Following a connection or disconnection event on the Extension Port,
+		// WiiBrew: Following a connection or disconnection event on the Extension Port,
 		// data reporting is disabled and the Data Reporting Mode must be reset before new data can arrive.
 		// after a game receives an unrequested status report,
 		// it expects data reports to stop until it sets the reporting mode again
@@ -392,24 +396,31 @@ void Wiimote::GetAccelData(u8* const data, const ReportFeatures& rptf)
 	wm_accel& accel = *(wm_accel*)(data + rptf.accel);
 	wm_buttons& core = *(wm_buttons*)(data + rptf.core);
 
-	u16 x = (u16)(m_accel.x * ACCEL_RANGE + ACCEL_ZERO_G);
-	u16 y = (u16)(m_accel.y * ACCEL_RANGE + ACCEL_ZERO_G);
-	u16 z = (u16)(m_accel.z * ACCEL_RANGE + ACCEL_ZERO_G);
+	// We now use 2 bits more precision, so multiply by 4 before converting to int
+	s16 x = (s16)(4 * (m_accel.x * ACCEL_RANGE + ACCEL_ZERO_G));
+	s16 y = (s16)(4 * (m_accel.y * ACCEL_RANGE + ACCEL_ZERO_G));
+	s16 z = (s16)(4 * (m_accel.z * ACCEL_RANGE + ACCEL_ZERO_G));
 
 	if (x > 1024)
 		x = 1024;
+	else if (x < 0)
+		x = 0;
 	if (y > 1024)
 		y = 1024;
+	else if (y < 0)
+		y = 0;
 	if (z > 1024)
 		z = 1024;
+	else if (z < 0)
+		z = 0;
 
-	accel.x = x & 0xFF;
-	accel.y = y & 0xFF;
-	accel.z = z & 0xFF;
+	accel.x = (x >> 2) & 0xFF;
+	accel.y = (y >> 2) & 0xFF;
+	accel.z = (z >> 2) & 0xFF;
 
-	core.acc_x_lsb = x >> 8 & 0x3;
-	core.acc_y_lsb = y >> 8 & 0x1;
-	core.acc_z_lsb = z >> 8 & 0x1;
+	core.acc_x_lsb = x & 0x3;
+	core.acc_y_lsb = (y >> 1) & 0x1;
+	core.acc_z_lsb = (z >> 1) & 0x1;
 }
 #define kCutoffFreq 5.0
 inline void LowPassFilter(double & var, double newval, double period)
@@ -655,7 +666,7 @@ void Wiimote::Update()
 		if (rptf.ext)
 			GetExtData(data + rptf.ext);
 
-		// hybrid wiimote stuff (for now, it's not supported while recording)
+		// hybrid Wiimote stuff (for now, it's not supported while recording)
 		if (WIIMOTE_SRC_HYBRID == g_wiimote_sources[m_index] && !Movie::IsRecordingInput())
 		{
 			using namespace WiimoteReal;
@@ -675,7 +686,7 @@ void Wiimote::Update()
 						{
 							const ReportFeatures& real_rptf = reporting_mode_features[real_data[1] - WM_REPORT_CORE];
 
-							// force same report type from real-wiimote
+							// force same report type from real-Wiimote
 							if (&real_rptf != &rptf)
 								rptf_size = 0;
 
@@ -723,7 +734,7 @@ void Wiimote::Update()
 
 					}
 
-					// copy over report from real-wiimote
+					// copy over report from real-Wiimote
 					if (-1 == rptf_size)
 					{
 						std::copy(rpt.begin(), rpt.end(), data);
@@ -760,7 +771,7 @@ void Wiimote::ControlChannel(const u16 _channelID, const void* _pData, u32 _Size
 	// Check for custom communication
 	if (99 == _channelID)
 	{
-		// wiimote disconnected
+		// Wiimote disconnected
 		//PanicAlert( "Wiimote Disconnected" );
 
 		// reset eeprom/register/reporting mode

@@ -1010,9 +1010,9 @@ void ARM64XEmitter::SMSUBL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra)
 {
 	EncodeData3SrcInst(3, Rd, Rn, Rm, Ra);
 }
-void ARM64XEmitter::SMULH(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra)
+void ARM64XEmitter::SMULH(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm)
 {
-	EncodeData3SrcInst(4, Rd, Rn, Rm, Ra);
+	EncodeData3SrcInst(4, Rd, Rn, Rm, SP);
 }
 void ARM64XEmitter::UMADDL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra)
 {
@@ -1022,9 +1022,9 @@ void ARM64XEmitter::UMSUBL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra)
 {
 	EncodeData3SrcInst(6, Rd, Rn, Rm, Ra);
 }
-void ARM64XEmitter::UMULH(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, ARM64Reg Ra)
+void ARM64XEmitter::UMULH(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm)
 {
-	EncodeData3SrcInst(7, Rd, Rn, Rm, Ra);
+	EncodeData3SrcInst(7, Rd, Rn, Rm, SP);
 }
 void ARM64XEmitter::MUL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm)
 {
@@ -1754,7 +1754,8 @@ void ARM64FloatEmitter::EmitConversion(bool sf, bool S, u32 type, u32 rmode, u32
 
 void ARM64FloatEmitter::EmitCompare(bool M, bool S, u32 op, u32 opcode2, ARM64Reg Rn, ARM64Reg Rm)
 {
-	bool is_double = !IsSingle(Rn);
+	_assert_msg_(DYNA_REC, IsQuad(Rn), "%s doesn't support vector!", __FUNCTION__);
+	bool is_double = IsDouble(Rn);
 
 	Rn = DecodeReg(Rn);
 	Rm = DecodeReg(Rm);
@@ -1765,7 +1766,8 @@ void ARM64FloatEmitter::EmitCompare(bool M, bool S, u32 op, u32 opcode2, ARM64Re
 
 void ARM64FloatEmitter::EmitCondSelect(bool M, bool S, CCFlags cond, ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm)
 {
-	bool is_double = !IsSingle(Rd);
+	_assert_msg_(DYNA_REC, IsQuad(Rd), "%s doesn't support vector!", __FUNCTION__);
+	bool is_double = IsDouble(Rd);
 
 	Rd = DecodeReg(Rd);
 	Rn = DecodeReg(Rn);
@@ -1838,6 +1840,17 @@ void ARM64FloatEmitter::EmitLoadStoreMultipleStructure(u32 size, bool L, u32 opc
 
 	Write32((quad << 30) | (3 << 26) | (L << 22) | (opcode << 12) | \
 	        (encoded_size << 10) | (Rn << 5) | Rt);
+}
+
+void ARM64FloatEmitter::EmitScalar1Source(bool M, bool S, u32 type, u32 opcode, ARM64Reg Rd, ARM64Reg Rn)
+{
+	_assert_msg_(DYNA_REC, IsQuad(Rd), "%s doesn't support vector!", __FUNCTION__);
+
+	Rd = DecodeReg(Rd);
+	Rn = DecodeReg(Rn);
+
+	Write32((M << 31) | (S << 29) | (0b11110001 << 21) | (type << 22) | \
+	        (opcode << 15) | (1 << 14) | (Rn << 5) | Rd);
 }
 
 void ARM64FloatEmitter::LDR(u8 size, IndexType type, ARM64Reg Rt, ARM64Reg Rn, s32 imm)
@@ -2082,11 +2095,28 @@ void ARM64FloatEmitter::LD1(u8 size, u8 count, ARM64Reg Rt, ARM64Reg Rn)
 		opcode = 0b0010;
 	EmitLoadStoreMultipleStructure(size, 1, opcode, Rt, Rn);
 }
+// Scalar - 1 Source
+void ARM64FloatEmitter::FABS(ARM64Reg Rd, ARM64Reg Rn)
+{
+	EmitScalar1Source(0, 0, IsDouble(Rd), 1, Rd, Rn);
+}
+void ARM64FloatEmitter::FNEG(ARM64Reg Rd, ARM64Reg Rn)
+{
+	EmitScalar1Source(0, 0, IsDouble(Rd), 0b000010, Rd, Rn);
+}
 
 // Scalar - 2 Source
+void ARM64FloatEmitter::FADD(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm)
+{
+	Emit2Source(0, 0, IsDouble(Rd), 0b0010, Rd, Rn, Rm);
+}
 void ARM64FloatEmitter::FMUL(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm)
 {
 	Emit2Source(0, 0, IsDouble(Rd), 0, Rd, Rn, Rm);
+}
+void ARM64FloatEmitter::FSUB(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm)
+{
+	Emit2Source(0, 0, IsDouble(Rd), 0b0011, Rd, Rn, Rm);
 }
 
 // Scalar floating point immediate

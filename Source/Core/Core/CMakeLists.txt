@@ -91,6 +91,7 @@ set(SRCS	ActionReplay.cpp
 			HW/EXI.cpp
 			HW/EXI_Device.cpp
 			HW/EXI_DeviceAD16.cpp
+			HW/EXI_DeviceAGP.cpp
 			HW/EXI_DeviceAMBaseboard.cpp
 			HW/EXI_DeviceEthernet.cpp
 			HW/EXI_DeviceGecko.cpp
@@ -199,6 +200,7 @@ if(_M_X86)
 			PowerPC/Jit64/Jit_Paired.cpp
 			PowerPC/Jit64/JitRegCache.cpp
 			PowerPC/Jit64/Jit_SystemRegisters.cpp
+			PowerPC/Jit64Common/Jit64AsmCommon.cpp
 			PowerPC/JitCommon/JitBackpatch.cpp
 			PowerPC/JitCommon/Jit_Util.cpp
 			PowerPC/JitCommon/TrampolineCache.cpp)
@@ -235,6 +237,7 @@ elseif(_M_ARM_64)
 	         PowerPC/JitArm64/JitArm64_Paired.cpp
 	         PowerPC/JitArm64/JitArm64_LoadStorePaired.cpp
 	         PowerPC/JitArm64/JitArm64_SystemRegisters.cpp
+	         PowerPC/JitArm64/Jit_Util.cpp
 	         PowerPC/JitArm64/JitArm64_Tables.cpp)
 endif()
 

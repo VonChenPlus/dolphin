@@ -4,11 +4,9 @@
 
 #include <algorithm>
 #include "Common/CommonFuncs.h"
-#include "Common/Hash.h"
-#if _M_SSE >= 0x402
 #include "Common/CPUDetect.h"
-#include <nmmintrin.h>
-#endif
+#include "Common/Hash.h"
+#include "Common/Intrinsics.h"
 
 static u64 (*ptrHashFunction)(const u8 *src, u32 len, u32 samples) = &GetMurmurHash3;
 
@@ -252,9 +250,14 @@ u64 GetCRC32(const u8 *src, u32 len, u32 samples)
 	if (data < end - Step * 2)
 		h[2] = _mm_crc32_u64(h[2], data[Step * 2]);
 
-	const u8 *data2 = (const u8*)end;
+	if (len & 7)
+	{
+		u64 temp = 0;
+		memcpy(&temp, end, len & 7);
+		h[0] = _mm_crc32_u64(h[0], temp);
+	}
+
 	// FIXME: is there a better way to combine these partial hashes?
-	h[0] = _mm_crc32_u64(h[0], u64(data2[0]));
 	return h[0] + (h[1] << 10) + (h[2] << 21) + (h[3] << 32);
 #else
 	return 0;

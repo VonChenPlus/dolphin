@@ -70,7 +70,7 @@ struct SConfig : NonCopyable
 	bool m_ListAustralia;
 	bool m_ListFrance;
 	bool m_ListGermany;
-	bool m_ListInternational;
+	bool m_ListWorld;
 	bool m_ListItaly;
 	bool m_ListKorea;
 	bool m_ListNetherlands;
@@ -100,6 +100,7 @@ struct SConfig : NonCopyable
 	std::string m_strMovieAuthor;
 	unsigned int m_FrameSkip;
 	bool m_DumpFrames;
+	bool m_DumpFramesSilent;
 	bool m_ShowInputDisplay;
 
 	// DSP settings

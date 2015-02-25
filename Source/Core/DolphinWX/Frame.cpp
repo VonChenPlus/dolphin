@@ -577,13 +577,7 @@ void CFrame::OnActive(wxActivateEvent& event)
 		if (event.GetActive() && event.GetEventObject() == m_RenderFrame)
 		{
 			if (SConfig::GetInstance().m_LocalCoreStartupParameter.bRenderToMain)
-			{
-#ifdef __WXMSW__
-				::SetFocus((HWND)m_RenderParent->GetHandle());
-#else
 				m_RenderParent->SetFocus();
-#endif
-			}
 
 			if (SConfig::GetInstance().m_LocalCoreStartupParameter.bHideCursor &&
 					Core::GetState() == Core::CORE_RUN)
@@ -891,7 +885,7 @@ void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
 		SConfig::GetInstance().m_ListAustralia &&
 		SConfig::GetInstance().m_ListFrance &&
 		SConfig::GetInstance().m_ListGermany &&
-		SConfig::GetInstance().m_ListInternational &&
+		SConfig::GetInstance().m_ListWorld &&
 		SConfig::GetInstance().m_ListItaly &&
 		SConfig::GetInstance().m_ListKorea &&
 		SConfig::GetInstance().m_ListNetherlands &&
@@ -909,7 +903,7 @@ void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
 		SConfig::GetInstance().m_ListAustralia =
 		SConfig::GetInstance().m_ListFrance =
 		SConfig::GetInstance().m_ListGermany =
-		SConfig::GetInstance().m_ListInternational =
+		SConfig::GetInstance().m_ListWorld =
 		SConfig::GetInstance().m_ListItaly =
 		SConfig::GetInstance().m_ListKorea =
 		SConfig::GetInstance().m_ListNetherlands =
@@ -927,7 +921,7 @@ void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
 		GetMenuBar()->FindItem(IDM_LIST_AUSTRALIA)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_FRANCE)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_GERMANY)->Check(true);
-		GetMenuBar()->FindItem(IDM_LIST_INTERNATIONAL)->Check(true);
+		GetMenuBar()->FindItem(IDM_LIST_WORLD)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_ITALY)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_KOREA)->Check(true);
 		GetMenuBar()->FindItem(IDM_LIST_NETHERLANDS)->Check(true);
@@ -1350,14 +1344,7 @@ void CFrame::ParseHotkeys(wxKeyEvent &event)
 	{
 		OSDChoice = 3;
 		// Toggle EFB copies between EFB2RAM and EFB2Texture
-		if (!g_Config.bEFBCopyEnable)
-		{
-			OSD::AddMessage("EFB Copies are disabled, enable them in Graphics settings for toggling", 6000);
-		}
-		else
-		{
-			g_Config.bCopyEFBToTexture = !g_Config.bCopyEFBToTexture;
-		}
+		g_Config.bSkipEFBCopyToRam = !g_Config.bSkipEFBCopyToRam;
 	}
 	else if (IsHotkey(event, HK_TOGGLE_FOG))
 	{

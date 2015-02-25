@@ -166,8 +166,6 @@ void VertexManager::Flush()
 	// loading a state will invalidate BP, so check for it
 	g_video_backend->CheckInvalidState();
 
-	VideoFifo_CheckEFBAccess();
-
 #if defined(_DEBUG) || defined(DEBUGFAST)
 	PRIM_LOG("frame%d:\n texgen=%d, numchan=%d, dualtex=%d, ztex=%d, cole=%d, alpe=%d, ze=%d", g_ActiveConfig.iSaveTargetId, xfmem.numTexGen.numTexGens,
 		xfmem.numChan.numColorChans, xfmem.dualTexTrans.enabled, bpmem.ztex2.op,
@@ -209,6 +207,7 @@ void VertexManager::Flush()
 				if (bpmem.tevind[i].IsActive() && bpmem.tevind[i].bt < bpmem.genMode.numindstages)
 					usedtextures[bpmem.tevindref.getTexMap(bpmem.tevind[i].bt)] = true;
 
+		TextureCache::UnbindTextures();
 		for (unsigned int i : usedtextures)
 		{
 			g_renderer->SetSamplerState(i & 3, i >> 2);
@@ -224,6 +223,7 @@ void VertexManager::Flush()
 				ERROR_LOG(VIDEO, "error loading texture");
 			}
 		}
+		TextureCache::BindTextures();
 	}
 
 	// set global vertex constants

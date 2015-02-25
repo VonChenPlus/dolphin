@@ -139,7 +139,7 @@ wxMenuBar* CFrame::CreateMenu()
 	fileMenu->Append(IDM_CHANGE_DISC, GetMenuLabel(HK_CHANGE_DISC));
 
 	wxMenu *externalDrive = new wxMenu;
-	fileMenu->Append(IDM_DRIVES, _("&Boot from DVD Drive..."), externalDrive);
+	fileMenu->Append(IDM_DRIVES, _("&Boot from DVD Backup..."), externalDrive);
 
 	drives = cdio_get_devices();
 	// Windows Limitation of 24 character drives
@@ -335,8 +335,8 @@ wxMenuBar* CFrame::CreateMenu()
 	regionMenu->Check(IDM_LIST_FRANCE, SConfig::GetInstance().m_ListFrance);
 	regionMenu->AppendCheckItem(IDM_LIST_GERMANY, _("Show Germany"));
 	regionMenu->Check(IDM_LIST_GERMANY, SConfig::GetInstance().m_ListGermany);
-	regionMenu->AppendCheckItem(IDM_LIST_INTERNATIONAL, _("Show International"));
-	regionMenu->Check(IDM_LIST_INTERNATIONAL, SConfig::GetInstance().m_ListInternational);
+	regionMenu->AppendCheckItem(IDM_LIST_WORLD, _("Show World"));
+	regionMenu->Check(IDM_LIST_WORLD, SConfig::GetInstance().m_ListWorld);
 	regionMenu->AppendCheckItem(IDM_LIST_ITALY, _("Show Italy"));
 	regionMenu->Check(IDM_LIST_ITALY, SConfig::GetInstance().m_ListItaly);
 	regionMenu->AppendCheckItem(IDM_LIST_KOREA, _("Show Korea"));
@@ -386,7 +386,7 @@ wxMenuBar* CFrame::CreateMenu()
 	wxMenu* helpMenu = new wxMenu;
 	// Re-enable when there's something useful to display */
 	// helpMenu->Append(wxID_HELP, _("&Help"));
-	helpMenu->Append(IDM_HELP_WEBSITE, _("Dolphin &Web Site"));
+	helpMenu->Append(IDM_HELP_WEBSITE, _("Dolphin &Website"));
 	helpMenu->Append(IDM_HELP_ONLINE_DOCS, _("Online &Documentation"));
 	helpMenu->Append(IDM_HELP_GITHUB, _("Dolphin at &GitHub"));
 	helpMenu->AppendSeparator();
@@ -1211,7 +1211,6 @@ void CFrame::DoStop()
 			Movie::EndPlayInput(false);
 		NetPlay::StopGame();
 
-		wxBeginBusyCursor();
 		BootManager::Stop();
 		UpdateGUI();
 	}
@@ -1219,8 +1218,6 @@ void CFrame::DoStop()
 
 void CFrame::OnStopped()
 {
-	wxEndBusyCursor();
-
 	m_confirmStop = false;
 
 #if defined(HAVE_X11) && HAVE_X11
@@ -1349,14 +1346,12 @@ void CFrame::OnConfigControllers(wxCommandEvent& WXUNUSED (event))
 {
 	ControllerConfigDiag config_dlg(this);
 	config_dlg.ShowModal();
-	config_dlg.Destroy();
 }
 
 void CFrame::OnConfigMenuCommands(wxCommandEvent& WXUNUSED(event))
 {
-	HotkeyConfigDialog *m_HotkeyDialog = new HotkeyConfigDialog(this);
-	m_HotkeyDialog->ShowModal();
-	m_HotkeyDialog->Destroy();
+	HotkeyConfigDialog m_HotkeyDialog(this);
+	m_HotkeyDialog.ShowModal();
 
 	// Update the GUI in case menu accelerators were changed
 	UpdateGUI();
@@ -1384,9 +1379,8 @@ void CFrame::OnConfigHotkey(wxCommandEvent& WXUNUSED (event))
 #endif
 	}
 
-	InputConfigDialog m_ConfigFrame(this, *hotkey_plugin, _("Dolphin Hotkeys"), 0);
+	InputConfigDialog m_ConfigFrame(this, *hotkey_plugin, _("Dolphin Hotkeys"));
 	m_ConfigFrame.ShowModal();
-	m_ConfigFrame.Destroy();
 
 	// if game isn't running
 	if (!was_init)
@@ -1415,7 +1409,7 @@ void CFrame::OnHelp(wxCommandEvent& event)
 		WxUtils::Launch("https://dolphin-emu.org/docs/guides/");
 		break;
 	case IDM_HELP_GITHUB:
-		WxUtils::Launch("https://github.com/dolphin-emu/dolphin/");
+		WxUtils::Launch("https://github.com/dolphin-emu/dolphin");
 		break;
 	}
 }
@@ -1945,8 +1939,8 @@ void CFrame::GameListChanged(wxCommandEvent& event)
 	case IDM_LIST_GERMANY:
 		SConfig::GetInstance().m_ListGermany = event.IsChecked();
 		break;
-	case IDM_LIST_INTERNATIONAL:
-		SConfig::GetInstance().m_ListInternational = event.IsChecked();
+	case IDM_LIST_WORLD:
+		SConfig::GetInstance().m_ListWorld = event.IsChecked();
 		break;
 	case IDM_LIST_ITALY:
 		SConfig::GetInstance().m_ListItaly = event.IsChecked();

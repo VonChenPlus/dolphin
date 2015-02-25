@@ -116,8 +116,6 @@ void Renderer::RenderToXFB(u32 xfbAddr, const EFBRectangle& sourceRc, u32 fbWidt
 	if (!fbWidth || !fbHeight)
 		return;
 
-	VideoFifo_CheckEFBAccess();
-	VideoFifo_CheckSwapRequestAt(xfbAddr, fbWidth, fbHeight);
 	XFBWrited = true;
 
 	if (g_ActiveConfig.bUseXFB)
@@ -127,7 +125,6 @@ void Renderer::RenderToXFB(u32 xfbAddr, const EFBRectangle& sourceRc, u32 fbWidt
 	else
 	{
 		Swap(xfbAddr, fbWidth, fbWidth, fbHeight, sourceRc, Gamma);
-		s_swapRequested.Clear();
 	}
 }
 
@@ -378,8 +375,7 @@ void Renderer::DrawDebugText()
 			break;
 		}
 
-		const char* const efbcopy_text = g_ActiveConfig.bEFBCopyEnable ?
-			(g_ActiveConfig.bCopyEFBToTexture ? "to Texture" : "to RAM") : "Disabled";
+		const char* const efbcopy_text = g_ActiveConfig.bSkipEFBCopyToRam ? "to Texture" : "to RAM";
 
 		// The rows
 		const std::string lines[] =

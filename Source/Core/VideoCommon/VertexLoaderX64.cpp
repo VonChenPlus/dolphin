@@ -1,10 +1,5 @@
-#ifdef _MSC_VER
-#include <intrin.h>
-#else
-#include <x86intrin.h>
-#endif
-
 #include "Common/CPUDetect.h"
+#include "Common/Intrinsics.h"
 #include "Common/JitRegister.h"
 #include "Common/x64ABI.h"
 #include "VideoCommon/VertexLoaderX64.h"
@@ -457,7 +452,7 @@ bool VertexLoaderX64::IsInitialized()
 	return cpu_info.bSSSE3;
 }
 
-int VertexLoaderX64::RunVertices(int primitive, int count, DataReader src, DataReader dst)
+int VertexLoaderX64::RunVertices(DataReader src, DataReader dst, int count, int primitive)
 {
 	m_numLoadedVertices += count;
 	return ((int (*)(u8* src, u8* dst, int count))region)(src.GetPointer(), dst.GetPointer(), count);

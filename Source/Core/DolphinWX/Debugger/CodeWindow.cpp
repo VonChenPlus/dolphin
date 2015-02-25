@@ -15,7 +15,6 @@
 #include <wx/menu.h>
 #include <wx/menuitem.h>
 #include <wx/panel.h>
-#include <wx/sizer.h>
 #include <wx/string.h>
 #include <wx/textctrl.h>
 #include <wx/textdlg.h>
@@ -75,31 +74,30 @@ CCodeWindow::CCodeWindow(const SCoreStartupParameter& _LocalCoreStartupParameter
 {
 	InitBitmaps();
 
-	wxBoxSizer* sizerBig   = new wxBoxSizer(wxHORIZONTAL);
-	wxBoxSizer* sizerLeft  = new wxBoxSizer(wxVERTICAL);
-
 	DebugInterface* di = &PowerPC::debug_interface;
 
 	codeview = new CCodeView(di, &g_symbolDB, this, wxID_ANY);
-	sizerBig->Add(sizerLeft, 2, wxEXPAND);
-	sizerBig->Add(codeview, 5, wxEXPAND);
 
-	sizerLeft->Add(callstack = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxSize(90, 100)), 0, wxEXPAND);
+	callstack = new wxListBox(this, wxID_ANY);
 	callstack->Bind(wxEVT_LISTBOX, &CCodeWindow::OnCallstackListChange, this);
 
-	sizerLeft->Add(symbols = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxSize(90, 100), 0, nullptr, wxLB_SORT), 1, wxEXPAND);
+	symbols = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SORT);
 	symbols->Bind(wxEVT_LISTBOX, &CCodeWindow::OnSymbolListChange, this);
 
-	sizerLeft->Add(calls = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxSize(90, 100), 0, nullptr, wxLB_SORT), 0, wxEXPAND);
+	calls = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SORT);
 	calls->Bind(wxEVT_LISTBOX, &CCodeWindow::OnCallsListChange, this);
 
-	sizerLeft->Add(callers = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxSize(90, 100), 0, nullptr, wxLB_SORT), 0, wxEXPAND);
+	callers = new wxListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, nullptr, wxLB_SORT);
 	callers->Bind(wxEVT_LISTBOX, &CCodeWindow::OnCallersListChange, this);
 
-	SetSizer(sizerBig);
-
-	sizerLeft->Fit(this);
-	sizerBig->Fit(this);
+	m_aui_manager.SetManagedWindow(this);
+	m_aui_manager.SetFlags(wxAUI_MGR_DEFAULT | wxAUI_MGR_LIVE_RESIZE);
+	m_aui_manager.AddPane(callstack, wxAuiPaneInfo().MinSize(150, 100).Left().CloseButton(false).Floatable(false).Caption(_("Callstack")));
+	m_aui_manager.AddPane(symbols, wxAuiPaneInfo().MinSize(150, 100).Left().CloseButton(false).Floatable(false).Caption(_("Symbols")));
+	m_aui_manager.AddPane(calls, wxAuiPaneInfo().MinSize(150, 100).Left().CloseButton(false).Floatable(false).Caption(_("Function calls")));
+	m_aui_manager.AddPane(callers, wxAuiPaneInfo().MinSize(150, 100).Left().CloseButton(false).Floatable(false).Caption(_("Function callers")));
+	m_aui_manager.AddPane(codeview, wxAuiPaneInfo().CenterPane().CloseButton(false).Floatable(false));
+	m_aui_manager.Update();
 
 	// Menu
 	Bind(wxEVT_MENU, &CCodeWindow::OnCPUMode, this, IDM_INTERPRETER, IDM_JIT_SR_OFF);
@@ -114,6 +112,11 @@ CCodeWindow::CCodeWindow(const SCoreStartupParameter& _LocalCoreStartupParameter
 
 	// Other
 	Bind(wxEVT_HOST_COMMAND, &CCodeWindow::OnHostMessage, this);
+}
+
+CCodeWindow::~CCodeWindow()
+{
+	m_aui_manager.UnInit();
 }
 
 wxMenuBar *CCodeWindow::GetMenuBar()
@@ -298,7 +301,7 @@ void CCodeWindow::StepOver()
 {
 	if (CCPU::IsStepping())
 	{
-		UGeckoInstruction inst = Memory::Read_Instruction(PC);
+		UGeckoInstruction inst = PowerPC::HostRead_Instruction(PC);
 		if (inst.LK)
 		{
 			PowerPC::breakpoints.ClearAllTemporary();
@@ -329,7 +332,7 @@ void CCodeWindow::StepOut()
 		u64 steps = 0;
 		PowerPC::CoreMode oldMode = PowerPC::GetMode();
 		PowerPC::SetMode(PowerPC::MODE_INTERPRETER);
-		UGeckoInstruction inst = Memory::Read_Instruction(PC);
+		UGeckoInstruction inst = PowerPC::HostRead_Instruction(PC);
 		while (inst.hex != 0x4e800020 && steps < timeout) // check for blr
 		{
 			if (inst.LK)
@@ -347,7 +350,7 @@ void CCodeWindow::StepOut()
 				PowerPC::SingleStep();
 				++steps;
 			}
-			inst = Memory::Read_Instruction(PC);
+			inst = PowerPC::HostRead_Instruction(PC);
 		}
 
 		PowerPC::SingleStep();
@@ -436,7 +439,7 @@ void CCodeWindow::CreateMenu(const SCoreStartupParameter& core_startup_parameter
 		" and stepping to work as explained in the Developer Documentation. But it can be very"
 		" slow, perhaps slower than 1 fps."),
 		wxITEM_CHECK);
-	interpreter->Check(core_startup_parameter.iCPUCore == SCoreStartupParameter::CORE_INTERPRETER);
+	interpreter->Check(core_startup_parameter.iCPUCore == PowerPC::CORE_INTERPRETER);
 	pCoreMenu->AppendSeparator();
 
 	pCoreMenu->Append(IDM_JIT_NO_BLOCK_LINKING, _("&JIT Block Linking off"),
@@ -604,7 +607,7 @@ void CCodeWindow::OnJitMenu(wxCommandEvent& event)
 			bool found = false;
 			for (u32 addr = 0x80000000; addr < 0x80180000; addr += 4)
 			{
-				const char *name = PPCTables::GetInstructionName(Memory::ReadUnchecked_U32(addr));
+				const char *name = PPCTables::GetInstructionName(PowerPC::HostRead_U32(addr));
 				if (name && (wx_name == name))
 				{
 					NOTICE_LOG(POWERPC, "Found %s at %08x", wx_name.c_str(), addr);

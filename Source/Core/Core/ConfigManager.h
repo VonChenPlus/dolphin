@@ -114,7 +114,6 @@ struct SConfig : NonCopyable
 	// Input settings
 	bool m_BackgroundInput;
 	bool m_GameCubeAdapter;
-	bool m_GameCubeAdapterThread;
 
 	SysConf* m_SYSCONF;
 
@@ -125,7 +124,7 @@ struct SConfig : NonCopyable
 	void LoadSettings();
 
 	// Return the permanent and somewhat globally used instance of this struct
-	static SConfig& GetInstance() {return(*m_Instance);}
+	static SConfig& GetInstance() { return(*m_Instance); }
 
 	static void Init();
 	static void Shutdown();

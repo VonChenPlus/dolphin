@@ -71,6 +71,8 @@
 #include "DiscIO/Volume.h"
 #include "DiscIO/VolumeCreator.h"
 #include "DolphinWX/ARCodeAddEdit.h"
+#include "DolphinWX/GameListCtrl.h"
+//#include "DolphinWX/Frame.h"
 #include "DolphinWX/ISOFile.h"
 #include "DolphinWX/ISOProperties.h"
 #include "DolphinWX/PatchAddEdit.h"
@@ -79,22 +81,6 @@
 #include "DolphinWX/resources/isoprop_disc.xpm"
 #include "DolphinWX/resources/isoprop_file.xpm"
 #include "DolphinWX/resources/isoprop_folder.xpm"
-
-struct WiiPartition
-{
-	DiscIO::IVolume *Partition;
-	DiscIO::IFileSystem *FileSystem;
-	std::vector<const DiscIO::SFileInfo *> Files;
-};
-static std::vector<WiiPartition> WiiDisc;
-
-static DiscIO::IVolume *OpenISO = nullptr;
-static DiscIO::IFileSystem *pFileSystem = nullptr;
-
-std::vector<PatchEngine::Patch> onFrame;
-std::vector<ActionReplay::ARCode> arCodes;
-PHackData PHack_Data;
-
 
 BEGIN_EVENT_TABLE(CISOProperties, wxDialog)
 	EVT_CLOSE(CISOProperties::OnClose)
@@ -163,22 +149,21 @@ CISOProperties::CISOProperties(const std::string fileName, wxWindow* parent, wxW
 		}
 	}
 
-	// Is it really necessary to use GetTitleID in case GetUniqueID fails?
-	std::string _iniFilename = OpenISO->GetUniqueID();
-	if (_iniFilename.empty())
+	// TODO: Is it really necessary to use GetTitleID in case GetUniqueID fails?
+	game_id = OpenISO->GetUniqueID();
+	if (game_id.empty())
 	{
-		u8 title_id[8];
-		if (OpenISO->GetTitleID(title_id))
+		u8 game_id_bytes[8];
+		if (OpenISO->GetTitleID(game_id_bytes))
 		{
-			_iniFilename = StringFromFormat("%016" PRIx64, Common::swap64(title_id));
+			game_id = StringFromFormat("%016" PRIx64, Common::swap64(game_id_bytes));
 		}
 	}
 
 	// Load game INIs
-	GameIniFileDefault = File::GetSysDirectory() + GAMESETTINGS_DIR DIR_SEP + _iniFilename + ".ini";
-	GameIniFileLocal = File::GetUserPath(D_GAMESETTINGS_IDX) + _iniFilename + ".ini";
-	GameIniDefault = SCoreStartupParameter::LoadDefaultGameIni(_iniFilename, OpenISO->GetRevision());
-	GameIniLocal = SCoreStartupParameter::LoadLocalGameIni(_iniFilename, OpenISO->GetRevision());
+	GameIniFileLocal = File::GetUserPath(D_GAMESETTINGS_IDX) + game_id + ".ini";
+	GameIniDefault = SCoreStartupParameter::LoadDefaultGameIni(game_id, OpenISO->GetRevision());
+	GameIniLocal = SCoreStartupParameter::LoadLocalGameIni(game_id, OpenISO->GetRevision());
 
 	// Setup GUI
 	OpenGameListItem = new GameListItem(fileName);
@@ -657,7 +642,16 @@ void CISOProperties::CreateGUIControls(bool IsWad)
 	sButtons->Add(new wxButton(this, wxID_OK, _("Close")));
 
 	// If there is no default gameini, disable the button.
-	if (!File::Exists(GameIniFileDefault))
+	bool game_ini_exists = false;
+	for (const std::string& ini_filename : SCoreStartupParameter::GetGameIniFilenames(game_id, OpenISO->GetRevision()))
+	{
+		if (File::Exists(File::GetSysDirectory() + GAMESETTINGS_DIR DIR_SEP + ini_filename))
+		{
+			game_ini_exists = true;
+			break;
+		}
+	}
+	if (!game_ini_exists)
 		EditConfigDefault->Disable();
 
 	// Add notebook and buttons to the dialog
@@ -675,8 +669,9 @@ void CISOProperties::OnClose(wxCloseEvent& WXUNUSED (event))
 {
 	if (!SaveGameConfig())
 		WxUtils::ShowErrorDialog(wxString::Format(_("Could not save %s."), GameIniFileLocal.c_str()));
-
-	EndModal(bRefreshList ? wxID_OK : wxID_CANCEL);
+	if (bRefreshList)
+		((CGameListCtrl*)GetParent())->Update();
+	Destroy();
 }
 
 void CISOProperties::OnCloseClick(wxCommandEvent& WXUNUSED (event))
@@ -1059,20 +1054,20 @@ void CISOProperties::LoadGameConfig()
 
 	int iTemp;
 	default_video->Get("ProjectionHack", &iTemp);
-	default_video->Get("PH_SZNear", &PHack_Data.PHackSZNear);
+	default_video->Get("PH_SZNear", &m_PHack_Data.PHackSZNear);
 	if (GameIniLocal.GetIfExists("Video", "PH_SZNear", &iTemp))
-		PHack_Data.PHackSZNear = !!iTemp;
-	default_video->Get("PH_SZFar", &PHack_Data.PHackSZFar);
+		m_PHack_Data.PHackSZNear = !!iTemp;
+	default_video->Get("PH_SZFar", &m_PHack_Data.PHackSZFar);
 	if (GameIniLocal.GetIfExists("Video", "PH_SZFar", &iTemp))
-		PHack_Data.PHackSZFar = !!iTemp;
+		m_PHack_Data.PHackSZFar = !!iTemp;
 
 	std::string sTemp;
-	default_video->Get("PH_ZNear", &PHack_Data.PHZNear);
+	default_video->Get("PH_ZNear", &m_PHack_Data.PHZNear);
 	if (GameIniLocal.GetIfExists("Video", "PH_ZNear", &sTemp))
-		PHack_Data.PHZNear = sTemp;
-	default_video->Get("PH_ZFar", &PHack_Data.PHZFar);
+		m_PHack_Data.PHZNear = sTemp;
+	default_video->Get("PH_ZFar", &m_PHack_Data.PHZFar);
 	if (GameIniLocal.GetIfExists("Video", "PH_ZFar", &sTemp))
-		PHack_Data.PHZFar = sTemp;
+		m_PHack_Data.PHZFar = sTemp;
 
 	IniFile::Section* default_emustate = GameIniDefault.GetOrCreateSection("EmuState");
 	default_emustate->Get("EmulationStateId", &iTemp, 0/*Not Set*/);
@@ -1163,10 +1158,10 @@ bool CISOProperties::SaveGameConfig()
 			GameIniLocal.DeleteKey((section), (key)); \
 	} while (0)
 
-	SAVE_IF_NOT_DEFAULT("Video", "PH_SZNear", (PHack_Data.PHackSZNear ? 1 : 0), 0);
-	SAVE_IF_NOT_DEFAULT("Video", "PH_SZFar", (PHack_Data.PHackSZFar ? 1 : 0), 0);
-	SAVE_IF_NOT_DEFAULT("Video", "PH_ZNear", PHack_Data.PHZNear, "");
-	SAVE_IF_NOT_DEFAULT("Video", "PH_ZFar", PHack_Data.PHZFar, "");
+	SAVE_IF_NOT_DEFAULT("Video", "PH_SZNear", (m_PHack_Data.PHackSZNear ? 1 : 0), 0);
+	SAVE_IF_NOT_DEFAULT("Video", "PH_SZFar", (m_PHack_Data.PHackSZFar ? 1 : 0), 0);
+	SAVE_IF_NOT_DEFAULT("Video", "PH_ZNear", m_PHack_Data.PHZNear, "");
+	SAVE_IF_NOT_DEFAULT("Video", "PH_ZFar", m_PHack_Data.PHZFar, "");
 	SAVE_IF_NOT_DEFAULT("EmuState", "EmulationStateId", EmuState->GetSelection(), 0);
 
 	std::string emu_issues = EmuIssues->GetValue().ToStdString();
@@ -1296,9 +1291,16 @@ void CISOProperties::OnComputeMD5Sum(wxCommandEvent& WXUNUSED (event))
 	m_MD5Sum->SetValue(output_string);
 }
 
+// Opens all pre-defined INIs for the game. If there are multiple ones,
+// they will all be opened, but there is usually only one
 void CISOProperties::OnShowDefaultConfig(wxCommandEvent& WXUNUSED (event))
 {
-	LaunchExternalEditor(GameIniFileDefault);
+	for (const std::string& filename : SCoreStartupParameter::GetGameIniFilenames(game_id, OpenISO->GetRevision()))
+	{
+		std::string path = File::GetSysDirectory() + GAMESETTINGS_DIR DIR_SEP + filename;
+		if (File::Exists(path))
+			LaunchExternalEditor(path);
+	}
 }
 
 void CISOProperties::ListSelectionChanged(wxCommandEvent& event)
@@ -1386,13 +1388,13 @@ void CISOProperties::PatchButtonClicked(wxCommandEvent& event)
 	{
 	case ID_EDITPATCH:
 		{
-		CPatchAddEdit dlg(selection, this);
+		CPatchAddEdit dlg(selection, onFrame, this);
 		dlg.ShowModal();
 		}
 		break;
 	case ID_ADDPATCH:
 		{
-		CPatchAddEdit dlg(-1, this, 1, _("Add Patch"));
+		CPatchAddEdit dlg(-1, onFrame, this, 1, _("Add Patch"));
 		if (dlg.ShowModal() == wxID_OK)
 		{
 			Patches->Append(StrToWxStr(onFrame.back().name));
@@ -1466,13 +1468,13 @@ void CISOProperties::ActionReplayButtonClicked(wxCommandEvent& event)
 	{
 	case ID_EDITCHEAT:
 		{
-		CARCodeAddEdit dlg(selection, this);
+		CARCodeAddEdit dlg(selection, arCodes, this);
 		dlg.ShowModal();
 		}
 		break;
 	case ID_ADDCHEAT:
 		{
-			CARCodeAddEdit dlg(-1, this, 1, _("Add ActionReplay Code"));
+			CARCodeAddEdit dlg(-1, arCodes, this, 1, _("Add ActionReplay Code"));
 			if (dlg.ShowModal() == wxID_OK)
 			{
 				Cheats->Append(StrToWxStr(arCodes.back().name));

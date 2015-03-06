@@ -506,25 +506,19 @@ CFrame::CFrame(wxFrame* parent,
 		g_pCodeWindow->UpdateButtonStates();
 
 	// check if game is running
-	m_bHotkeysInit = InitControllers();
+	InitControllers();
 
-	m_poll_hotkey_timer = new wxTimer(this);
+	m_poll_hotkey_timer.SetOwner(this);
 	Bind(wxEVT_TIMER, &CFrame::PollHotkeys, this);
-	m_poll_hotkey_timer->Start(1000 / 60, wxTIMER_CONTINUOUS);
+	m_poll_hotkey_timer.Start(1000 / 60, wxTIMER_CONTINUOUS);
 }
 // Destructor
 CFrame::~CFrame()
 {
-	m_poll_hotkey_timer->Stop();
-
-	if (m_bHotkeysInit)
-	{
-		Wiimote::Shutdown();
-		Keyboard::Shutdown();
-		Pad::Shutdown();
-		HotkeyManagerEmu::Shutdown();
-		m_bHotkeysInit = false;
-	}
+	Wiimote::Shutdown();
+	Keyboard::Shutdown();
+	Pad::Shutdown();
+	HotkeyManagerEmu::Shutdown();
 
 	drives.clear();
 
@@ -866,7 +860,7 @@ bool CFrame::UIHasFocus()
 	return (focusWindow != nullptr);
 }
 
-void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED (event))
+void CFrame::OnGameListCtrl_ItemActivated(wxListEvent& WXUNUSED(event))
 {
 	// Show all platforms and regions if...
 	// 1. All platforms are set to hide
@@ -1106,7 +1100,7 @@ void CFrame::OnKeyDown(wxKeyEvent& event)
 
 void CFrame::OnKeyUp(wxKeyEvent& event)
 {
-	if(Core::IsRunning() && (RendererHasFocus() || TASInputHasFocus()))
+	if (Core::IsRunning() && (RendererHasFocus() || TASInputHasFocus()))
 	{
 		if (IsHotkey(event, HK_TOGGLE_THROTTLE))
 		{
@@ -1191,12 +1185,12 @@ void CFrame::DoFullscreen(bool enable_fullscreen)
 	ToggleDisplayMode(enable_fullscreen);
 
 #if defined(__APPLE__)
-	NSView *view = (NSView *) m_RenderFrame->GetHandle();
+	NSView *view = (NSView *)m_RenderFrame->GetHandle();
 	NSWindow *window = [view window];
 
 	if (enable_fullscreen != RendererIsFullscreen())
 	{
-		[window toggleFullScreen:nil];
+		[window toggleFullScreen : nil];
 	}
 #else
 	if (enable_fullscreen)
@@ -1270,10 +1264,7 @@ const CGameListCtrl *CFrame::GetGameListCtrl() const
 void CFrame::PollHotkeys(wxTimerEvent& event)
 {
 	if (Core::GetState() == Core::CORE_UNINITIALIZED || Core::GetState() == Core::CORE_PAUSE)
-	{
-		m_bHotkeysInit = InitControllers();
 		g_controller_interface.UpdateInput();
-	}
 
 	if (Core::GetState() != Core::CORE_STOPPING)
 	{

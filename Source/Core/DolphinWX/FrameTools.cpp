@@ -253,7 +253,7 @@ wxMenuBar* CFrame::CreateMenu()
 	toolsMenu->Append(IDM_MEMCARD, _("&Memcard Manager (GC)"));
 	toolsMenu->Append(IDM_IMPORT_SAVE, _("Import Wii Save"));
 	toolsMenu->Append(IDM_EXPORT_ALL_SAVE, _("Export All Wii Saves"));
-	toolsMenu->Append(IDM_CHEATS, _("&Cheats Manager"));
+	toolsMenu->Append(IDM_CHEATS, _("&Cheat Manager"));
 
 	toolsMenu->Append(IDM_NETPLAY, _("Start &NetPlay"));
 
@@ -1362,8 +1362,6 @@ void CFrame::OnConfigMenuCommands(wxCommandEvent& WXUNUSED(event))
 
 void CFrame::OnConfigHotkey(wxCommandEvent& WXUNUSED (event))
 {
-	bool was_init = false;
-
 	InputConfig* const hotkey_plugin = HotkeyManagerEmu::GetConfig();
 
 	// check if game is running
@@ -1380,8 +1378,7 @@ void CFrame::OnConfigHotkey(wxCommandEvent& WXUNUSED (event))
 	m_ConfigFrame.ShowModal();
 
 	// Update references in case controllers were refreshed
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bWii)
-		Wiimote::LoadConfig();
+	Wiimote::LoadConfig();
 	Keyboard::LoadConfig();
 	Pad::LoadConfig();
 	HotkeyManagerEmu::LoadConfig();
@@ -1487,7 +1484,7 @@ void CFrame::OnImportSave(wxCommandEvent& WXUNUSED (event))
 	}
 }
 
-void CFrame::OnShow_CheatsWindow(wxCommandEvent& WXUNUSED (event))
+void CFrame::OnShowCheatsWindow(wxCommandEvent& WXUNUSED (event))
 {
 	if (!g_CheatsWindow)
 		g_CheatsWindow = new wxCheatsWindow(this);

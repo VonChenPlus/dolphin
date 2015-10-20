@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2010 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 // Additional copyrights go to Duddie and Tratax (c) 2004
@@ -8,6 +8,7 @@
 #include "Core/DSP/DSPEmitter.h"
 #include "Core/DSP/DSPIntCCUtil.h"
 #include "Core/DSP/DSPIntUtil.h"
+#include "Core/DSP/DSPMemoryMap.h"
 
 using namespace Gen;
 
@@ -73,7 +74,7 @@ void DSPEmitter::andcf(const UDSPInstruction opc)
 //		else
 //			g_dsp.r.sr &= ~SR_LOGIC_ZERO;
 		OpArg sr_reg;
-		gpr.getReg(DSP_REG_SR,sr_reg);
+		gpr.GetReg(DSP_REG_SR,sr_reg);
 		AND(16, R(RAX), Imm16(imm));
 		CMP(16, R(RAX), Imm16(imm));
 		FixupBranch notLogicZero = J_CC(CC_NE);
@@ -82,7 +83,7 @@ void DSPEmitter::andcf(const UDSPInstruction opc)
 		SetJumpTarget(notLogicZero);
 		AND(16, sr_reg, Imm16(~SR_LOGIC_ZERO));
 		SetJumpTarget(exit);
-		gpr.putReg(DSP_REG_SR);
+		gpr.PutReg(DSP_REG_SR);
 	}
 }
 
@@ -109,7 +110,7 @@ void DSPEmitter::andf(const UDSPInstruction opc)
 //		else
 //			g_dsp.r.sr &= ~SR_LOGIC_ZERO;
 		OpArg sr_reg;
-		gpr.getReg(DSP_REG_SR,sr_reg);
+		gpr.GetReg(DSP_REG_SR,sr_reg);
 		TEST(16, R(RAX), Imm16(imm));
 		FixupBranch notLogicZero = J_CC(CC_NE);
 		OR(16, sr_reg, Imm16(SR_LOGIC_ZERO));
@@ -117,7 +118,7 @@ void DSPEmitter::andf(const UDSPInstruction opc)
 		SetJumpTarget(notLogicZero);
 		AND(16, sr_reg, Imm16(~SR_LOGIC_ZERO));
 		SetJumpTarget(exit);
-		gpr.putReg(DSP_REG_SR);
+		gpr.PutReg(DSP_REG_SR);
 	}
 }
 
@@ -168,8 +169,7 @@ void DSPEmitter::cmp(const UDSPInstruction opc)
 {
 	if (FlagsNeeded())
 	{
-		X64Reg tmp1;
-		gpr.getFreeXReg(tmp1);
+		X64Reg tmp1 = gpr.GetFreeXReg();
 //		s64 acc0 = dsp_get_long_acc(0);
 		get_long_acc(0, tmp1);
 		MOV(64, R(RAX), R(tmp1));
@@ -180,7 +180,7 @@ void DSPEmitter::cmp(const UDSPInstruction opc)
 //		Update_SR_Register64(res, isCarry2(acc0, res), isOverflow(acc0, -acc1, res)); // CF -> influence on ABS/0xa100
 		NEG(64, R(RDX));
 		Update_SR_Register64_Carry(EAX, tmp1, true);
-		gpr.putXReg(tmp1);
+		gpr.PutXReg(tmp1);
 	}
 }
 
@@ -197,8 +197,7 @@ void DSPEmitter::cmpar(const UDSPInstruction opc)
 		u8 rreg = ((opc >> 12) & 0x1);
 		u8 sreg = (opc >> 11) & 0x1;
 
-		X64Reg tmp1;
-		gpr.getFreeXReg(tmp1);
+		X64Reg tmp1 = gpr.GetFreeXReg();
 //		s64 sr = dsp_get_long_acc(sreg);
 		get_long_acc(sreg, tmp1);
 		MOV(64, R(RAX), R(tmp1));
@@ -211,7 +210,7 @@ void DSPEmitter::cmpar(const UDSPInstruction opc)
 //		Update_SR_Register64(res, isCarry2(sr, res), isOverflow(sr, -rr, res));
 		NEG(64, R(RDX));
 		Update_SR_Register64_Carry(EAX, tmp1, true);
-		gpr.putXReg(tmp1);
+		gpr.PutXReg(tmp1);
 	}
 }
 
@@ -227,8 +226,7 @@ void DSPEmitter::cmpi(const UDSPInstruction opc)
 	if (FlagsNeeded())
 	{
 		u8 reg  = (opc >> 8) & 0x1;
-		X64Reg tmp1;
-		gpr.getFreeXReg(tmp1);
+		X64Reg tmp1 = gpr.GetFreeXReg();
 //		s64 val = dsp_get_long_acc(reg);
 		get_long_acc(reg, tmp1);
 		MOV(64, R(RAX), R(tmp1));
@@ -240,7 +238,7 @@ void DSPEmitter::cmpi(const UDSPInstruction opc)
 //		Update_SR_Register64(res, isCarry2(val, res), isOverflow(val, -imm, res));
 		NEG(64, R(RDX));
 		Update_SR_Register64_Carry(EAX, tmp1, true);
-		gpr.putXReg(tmp1);
+		gpr.PutXReg(tmp1);
 	}
 }
 
@@ -257,8 +255,7 @@ void DSPEmitter::cmpis(const UDSPInstruction opc)
 	{
 		u8 areg = (opc >> 8) & 0x1;
 //		s64 acc = dsp_get_long_acc(areg);
-		X64Reg tmp1;
-		gpr.getFreeXReg(tmp1);
+		X64Reg tmp1 = gpr.GetFreeXReg();
 		get_long_acc(areg, tmp1);
 		MOV(64, R(RAX), R(tmp1));
 //		s64 val = (s8)opc;
@@ -269,7 +266,7 @@ void DSPEmitter::cmpis(const UDSPInstruction opc)
 //		Update_SR_Register64(res, isCarry2(acc, res), isOverflow(acc, -val, res));
 		NEG(64, R(RDX));
 		Update_SR_Register64_Carry(EAX, tmp1, true);
-		gpr.putXReg(tmp1);
+		gpr.PutXReg(tmp1);
 	}
 }
 
@@ -526,8 +523,7 @@ void DSPEmitter::addr(const UDSPInstruction opc)
 	u8 sreg = ((opc >> 9) & 0x3) + DSP_REG_AXL0;
 
 //	s64 acc = dsp_get_long_acc(dreg);
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
 //	s64 ax = (s16)g_dsp.r[sreg];
@@ -548,7 +544,7 @@ void DSPEmitter::addr(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // ADDAX $acD, $axS
@@ -561,8 +557,7 @@ void DSPEmitter::addax(const UDSPInstruction opc)
 	u8 dreg = (opc >> 8) & 0x1;
 	u8 sreg = (opc >> 9) & 0x1;
 
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -583,7 +578,7 @@ void DSPEmitter::addax(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // ADD $acD, $ac(1-D)
@@ -595,8 +590,7 @@ void DSPEmitter::add(const UDSPInstruction opc)
 {
 	u8 dreg  = (opc >> 8) & 0x1;
 
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc0 = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -617,7 +611,7 @@ void DSPEmitter::add(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // ADDP $acD
@@ -629,8 +623,7 @@ void DSPEmitter::addp(const UDSPInstruction opc)
 {
 	u8 dreg = (opc >> 8) & 0x1;
 
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -651,7 +644,7 @@ void DSPEmitter::addp(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // ADDAXL $acD, $axS.l
@@ -665,8 +658,7 @@ void DSPEmitter::addaxl(const UDSPInstruction opc)
 	u8 sreg = (opc >> 9) & 0x1;
 	u8 dreg = (opc >> 8) & 0x1;
 
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	u64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -688,7 +680,7 @@ void DSPEmitter::addaxl(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // ADDI $amR, #I
@@ -700,8 +692,7 @@ void DSPEmitter::addaxl(const UDSPInstruction opc)
 void DSPEmitter::addi(const UDSPInstruction opc)
 {
 	u8 areg = (opc >> 8) & 0x1;
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(areg);
 	get_long_acc(areg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -726,7 +717,7 @@ void DSPEmitter::addi(const UDSPInstruction opc)
 	{
 		set_long_acc(areg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // ADDIS $acD, #I
@@ -738,8 +729,7 @@ void DSPEmitter::addis(const UDSPInstruction opc)
 {
 	u8 dreg = (opc >> 8) & 0x1;
 
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -763,7 +753,7 @@ void DSPEmitter::addis(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // INCM $acsD
@@ -775,8 +765,7 @@ void DSPEmitter::incm(const UDSPInstruction opc)
 {
 	u8 dreg = (opc >> 8) & 0x1;
 	s64 subtract = 0x10000;
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -796,7 +785,7 @@ void DSPEmitter::incm(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // INC $acD
@@ -807,8 +796,7 @@ void DSPEmitter::incm(const UDSPInstruction opc)
 void DSPEmitter::inc(const UDSPInstruction opc)
 {
 	u8 dreg = (opc >> 8) & 0x1;
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -828,7 +816,7 @@ void DSPEmitter::inc(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 //----
@@ -843,8 +831,7 @@ void DSPEmitter::subr(const UDSPInstruction opc)
 	u8 dreg = (opc >> 8) & 0x1;
 	u8 sreg = ((opc >> 9) & 0x3) + DSP_REG_AXL0;
 
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -868,7 +855,7 @@ void DSPEmitter::subr(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // SUBAX $acD, $axS
@@ -881,8 +868,7 @@ void DSPEmitter::subax(const UDSPInstruction opc)
 	u8 dreg = (opc >> 8) & 0x1;
 	u8 sreg = (opc >> 9) & 0x1;
 
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -904,7 +890,7 @@ void DSPEmitter::subax(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // SUB $acD, $ac(1-D)
@@ -915,8 +901,7 @@ void DSPEmitter::subax(const UDSPInstruction opc)
 void DSPEmitter::sub(const UDSPInstruction opc)
 {
 	u8 dreg = (opc >> 8) & 0x1;
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc1 = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -938,7 +923,7 @@ void DSPEmitter::sub(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // SUBP $acD
@@ -949,8 +934,7 @@ void DSPEmitter::sub(const UDSPInstruction opc)
 void DSPEmitter::subp(const UDSPInstruction opc)
 {
 	u8 dreg = (opc >> 8) & 0x1;
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -972,7 +956,7 @@ void DSPEmitter::subp(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // DECM $acsD
@@ -984,8 +968,7 @@ void DSPEmitter::decm(const UDSPInstruction opc)
 {
 	u8 dreg = (opc >> 8) & 0x01;
 	s64 subtract = 0x10000;
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -1005,7 +988,7 @@ void DSPEmitter::decm(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg, RAX);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 // DEC $acD
@@ -1016,8 +999,7 @@ void DSPEmitter::decm(const UDSPInstruction opc)
 void DSPEmitter::dec(const UDSPInstruction opc)
 {
 	u8 dreg = (opc >> 8) & 0x01;
-	X64Reg tmp1;
-	gpr.getFreeXReg(tmp1);
+	X64Reg tmp1 = gpr.GetFreeXReg();
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg, tmp1);
 	MOV(64, R(RAX), R(tmp1));
@@ -1037,7 +1019,7 @@ void DSPEmitter::dec(const UDSPInstruction opc)
 	{
 		set_long_acc(dreg);
 	}
-	gpr.putXReg(tmp1);
+	gpr.PutXReg(tmp1);
 }
 
 //----
@@ -1075,7 +1057,7 @@ void DSPEmitter::abs(const UDSPInstruction opc)
 //	s64 acc = dsp_get_long_acc(dreg);
 	get_long_acc(dreg);
 //	if (acc < 0) acc = 0 - acc;
-	CMP(64, R(RAX), Imm8(0));
+	TEST(64, R(RAX), R(RAX));
 	FixupBranch GreaterThanOrEqual = J_CC(CC_GE);
 	NEG(64, R(RAX));
 	set_long_acc(dreg);
@@ -1367,7 +1349,7 @@ void DSPEmitter::lsrn(const UDSPInstruction opc)
 	//		acc <<= -shift;
 	//	}
 
-	CMP(64, R(RDX), Imm8(0));//is this actually worth the branch cost?
+	TEST(64, R(RDX), R(RDX));//is this actually worth the branch cost?
 	FixupBranch zero = J_CC(CC_E);
 	TEST(16, R(RAX), Imm16(0x3f));//is this actually worth the branch cost?
 	FixupBranch noShift = J_CC(CC_Z);
@@ -1426,7 +1408,7 @@ void DSPEmitter::asrn(const UDSPInstruction opc)
 //		acc <<= -shift;
 //	}
 
-	CMP(64, R(RDX), Imm8(0));
+	TEST(64, R(RDX), R(RDX));
 	FixupBranch zero = J_CC(CC_E);
 	TEST(16, R(RAX), Imm16(0x3f));
 	FixupBranch noShift = J_CC(CC_Z);
@@ -1489,7 +1471,7 @@ void DSPEmitter::lsrnrx(const UDSPInstruction opc)
 //		acc >>= -shift;
 //	}
 
-	CMP(64, R(RDX), Imm8(0));
+	TEST(64, R(RDX), R(RDX));
 	FixupBranch zero = J_CC(CC_E);
 	TEST(16, R(RAX), Imm16(0x3f));
 	FixupBranch noShift = J_CC(CC_Z);
@@ -1546,7 +1528,7 @@ void DSPEmitter::asrnrx(const UDSPInstruction opc)
 //		acc >>= -shift;
 //	}
 
-	CMP(64, R(RDX), Imm8(0));
+	TEST(64, R(RDX), R(RDX));
 	FixupBranch zero = J_CC(CC_E);
 	TEST(16, R(RAX), Imm16(0x3f));
 	FixupBranch noShift = J_CC(CC_Z);
@@ -1604,7 +1586,7 @@ void DSPEmitter::lsrnr(const UDSPInstruction opc)
 //	else if (shift < 0)
 //		acc >>= -shift;
 
-	CMP(64, R(RDX), Imm8(0));
+	TEST(64, R(RDX), R(RDX));
 	FixupBranch zero = J_CC(CC_E);
 	TEST(16, R(RAX), Imm16(0x3f));
 	FixupBranch noShift = J_CC(CC_Z);
@@ -1659,7 +1641,7 @@ void DSPEmitter::asrnr(const UDSPInstruction opc)
 //	else if (shift < 0)
 //		acc >>= -shift;
 
-	CMP(64, R(RDX), Imm8(0));
+	TEST(64, R(RDX), R(RDX));
 	FixupBranch zero = J_CC(CC_E);
 	TEST(16, R(RAX), Imm16(0x3f));
 	FixupBranch noShift = J_CC(CC_Z);

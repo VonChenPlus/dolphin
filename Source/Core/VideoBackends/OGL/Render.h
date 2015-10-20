@@ -1,3 +1,7 @@
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
+// Refer to the license.txt file included.
+
 #pragma once
 
 #include <string>
@@ -12,9 +16,19 @@ enum GLSL_VERSION
 {
 	GLSL_130,
 	GLSL_140,
-	GLSL_150,  // and above
+	GLSL_150,
+	GLSL_330,
+	GLSL_400,  // and above
 	GLSLES_300,  // GLES 3.0
 	GLSLES_310, // GLES 3.1
+	GLSLES_320, // GLES 3.2
+};
+enum class ES_TEXBUF_TYPE
+{
+	TEXBUF_NONE,
+	TEXBUF_CORE,
+	TEXBUF_OES,
+	TEXBUF_EXT
 };
 
 // ogl-only config, so not in VideoConfig.h
@@ -26,12 +40,18 @@ struct VideoConfig
 	bool bSupportsGLBaseVertex;
 	bool bSupportsGLBufferStorage;
 	bool bSupportsMSAA;
-	bool bSupportSampleShading;
 	GLSL_VERSION eSupportedGLSLVersion;
 	bool bSupportOGL31;
 	bool bSupportViewportFloat;
 	bool bSupportsAEP;
 	bool bSupportsDebug;
+	bool bSupportsCopySubImage;
+	u8   SupportedESPointSize;
+	ES_TEXBUF_TYPE SupportedESTextureBuffer;
+	bool bSupports2DTextureStorage;
+	bool bSupports3DTextureStorage;
+	bool bSupportsEarlyFragmentTests;
+	bool bSupportsConservativeDepth;
 
 	const char* gl_vendor;
 	const char* gl_renderer;
@@ -71,6 +91,7 @@ public:
 	void FlipImageData(u8 *data, int w, int h, int pixel_width = 3);
 
 	u32 AccessEFB(EFBAccessType type, u32 x, u32 y, u32 poke_data) override;
+	void PokeEFB(EFBAccessType type, const std::vector<EfbPokeData>& data) override;
 
 	u16 BBoxRead(int index) override;
 	void BBoxWrite(int index, u16 value) override;
@@ -91,7 +112,7 @@ public:
 	int GetMaxTextureSize() override;
 
 private:
-	void UpdateEFBCache(EFBAccessType type, u32 cacheRectIdx, const EFBRectangle& efbPixelRc, const TargetRectangle& targetPixelRc, const u32* data);
+	void UpdateEFBCache(EFBAccessType type, u32 cacheRectIdx, const EFBRectangle& efbPixelRc, const TargetRectangle& targetPixelRc, const void* data);
 
 	void BlitScreen(TargetRectangle src, TargetRectangle dst, GLuint src_texture, int src_width, int src_height);
 };

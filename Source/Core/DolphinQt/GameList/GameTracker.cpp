@@ -1,9 +1,10 @@
 // Copyright 2014 Dolphin Emulator Project
-// Licensed under GPLv2
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include "Common/CDUtils.h"
 #include "Common/FileSearch.h"
+#include "Common/FileUtil.h"
 #include "Core/ConfigManager.h"
 
 #include "DolphinQt/GameList/GameGrid.h"
@@ -24,17 +25,17 @@ void AbstractGameList::RemoveGames(QList<GameFile*> items)
 
 DGameTracker::DGameTracker(QWidget* parent_widget)
 	: QStackedWidget(parent_widget),
-	  m_watcher(this)
+	  m_watcher(new QFileSystemWatcher(this))
 {
-	connect(&m_watcher, SIGNAL(directoryChanged(QString)), this, SLOT(ScanForGames()));
+	connect(m_watcher, &QFileSystemWatcher::directoryChanged, this, &DGameTracker::ScanForGames);
 
 	m_tree_widget = new DGameTree(this);
 	addWidget(m_tree_widget);
-	connect(m_tree_widget, SIGNAL(StartGame()), this, SIGNAL(StartGame()));
+	connect(m_tree_widget, &DGameTree::StartGame, this, &DGameTracker::StartGame);
 
 	m_grid_widget = new DGameGrid(this);
 	addWidget(m_grid_widget);
-	connect(m_grid_widget, SIGNAL(StartGame()), this, SIGNAL(StartGame()));
+	connect(m_grid_widget, &DGameGrid::StartGame, this, &DGameTracker::StartGame);
 
 	SetViewStyle(STYLE_LIST);
 }
@@ -77,54 +78,37 @@ void DGameTracker::ScanForGames()
 {
 	setDisabled(true);
 
-	CFileSearch::XStringVector dirs(SConfig::GetInstance().m_ISOFolder);
-
+	delete m_watcher;
+	m_watcher = new QFileSystemWatcher(this);
+	for (std::string dir : SConfig::GetInstance().m_ISOFolder)
+		m_watcher->addPath(QString::fromStdString(dir));
 	if (SConfig::GetInstance().m_RecursiveISOFolder)
 	{
-		for (u32 i = 0; i < dirs.size(); i++)
-		{
-			File::FSTEntry FST_Temp;
-			File::ScanDirectoryTree(dirs[i], FST_Temp);
-			for (auto& entry : FST_Temp.children)
-			{
-				if (entry.isDirectory)
-				{
-					bool duplicate = false;
-					for (auto& dir : dirs)
-					{
-						if (dir == entry.physicalName)
-						{
-							duplicate = true;
-							break;
-						}
-					}
-					if (!duplicate)
-						dirs.push_back(entry.physicalName);
-				}
-			}
-		}
+		for (std::string dir : FindSubdirectories(SConfig::GetInstance().m_ISOFolder, /*recursive*/ true))
+			m_watcher->addPath(QString::fromStdString(dir));
 	}
 
-	for (std::string& dir : dirs)
-		m_watcher.addPath(QString::fromStdString(dir));
-
-	CFileSearch::XStringVector exts;
+	std::vector<std::string> exts;
 	if (SConfig::GetInstance().m_ListGC)
 	{
-		exts.push_back("*.gcm");
-		exts.push_back("*.gcz");
+		exts.push_back(".gcm");
+		exts.push_back(".gcz");
 	}
 	if (SConfig::GetInstance().m_ListWii || SConfig::GetInstance().m_ListGC)
 	{
-		exts.push_back("*.iso");
-		exts.push_back("*.ciso");
-		exts.push_back("*.wbfs");
+		exts.push_back(".iso");
+		exts.push_back(".ciso");
+		exts.push_back(".wbfs");
 	}
 	if (SConfig::GetInstance().m_ListWad)
-		exts.push_back("*.wad");
+		exts.push_back(".wad");
+	if (SConfig::GetInstance().m_ListElfDol)
+	{
+		exts.push_back(".dol");
+		exts.push_back(".elf");
+	}
 
-	CFileSearch FileSearch(exts, dirs);
-	const CFileSearch::XStringVector& rFilenames = FileSearch.GetFileNames();
+	auto rFilenames = DoFileSearch(exts, SConfig::GetInstance().m_ISOFolder, SConfig::GetInstance().m_RecursiveISOFolder);
 	QList<GameFile*> newItems;
 	QStringList allItems;
 
@@ -163,10 +147,6 @@ void DGameTracker::ScanForGames()
 						if (!SConfig::GetInstance().m_ListGermany)
 							list = false;
 						break;
-					case DiscIO::IVolume::COUNTRY_WORLD:
-						if (!SConfig::GetInstance().m_ListWorld)
-							list = false;
-						break;
 					case DiscIO::IVolume::COUNTRY_ITALY:
 						if (!SConfig::GetInstance().m_ListItaly)
 							list = false;
@@ -197,6 +177,10 @@ void DGameTracker::ScanForGames()
 						break;
 					case DiscIO::IVolume::COUNTRY_USA:
 						if (!SConfig::GetInstance().m_ListUsa)
+							list = false;
+						break;
+					case DiscIO::IVolume::COUNTRY_WORLD:
+						if (!SConfig::GetInstance().m_ListWorld)
 							list = false;
 						break;
 					case DiscIO::IVolume::COUNTRY_UNKNOWN:

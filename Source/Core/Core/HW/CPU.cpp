@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include <mutex>
@@ -13,6 +13,7 @@
 #include "Core/Movie.h"
 #include "Core/HW/CPU.h"
 #include "Core/HW/DSP.h"
+#include "Core/HW/Memmap.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "VideoCommon/VideoBackendBase.h"
 
@@ -23,19 +24,22 @@ namespace
 	static std::mutex m_csCpuOccupied;
 }
 
-void CCPU::Init(int cpu_core)
+namespace CPU
+{
+
+void Init(int cpu_core)
 {
 	PowerPC::Init(cpu_core);
 	m_SyncEvent = nullptr;
 }
 
-void CCPU::Shutdown()
+void Shutdown()
 {
 	PowerPC::Shutdown();
 	m_SyncEvent = nullptr;
 }
 
-void CCPU::Run()
+void Run()
 {
 	std::lock_guard<std::mutex> lk(m_csCpuOccupied);
 	Host_UpdateDisasmDialog();
@@ -80,22 +84,22 @@ void CCPU::Run()
 	}
 }
 
-void CCPU::Stop()
+void Stop()
 {
 	PowerPC::Stop();
 	m_StepEvent.Set();
 }
 
-bool CCPU::IsStepping()
+bool IsStepping()
 {
 	return PowerPC::GetState() == PowerPC::CPU_STEPPING;
 }
 
-void CCPU::Reset()
+void Reset()
 {
 }
 
-void CCPU::StepOpcode(Common::Event *event)
+void StepOpcode(Common::Event* event)
 {
 	m_StepEvent.Set();
 	if (PowerPC::GetState() == PowerPC::CPU_STEPPING)
@@ -104,9 +108,9 @@ void CCPU::StepOpcode(Common::Event *event)
 	}
 }
 
-void CCPU::EnableStepping(const bool _bStepping)
+void EnableStepping(const bool stepping)
 {
-	if (_bStepping)
+	if (stepping)
 	{
 		PowerPC::Pause();
 		m_StepEvent.Reset();
@@ -117,7 +121,14 @@ void CCPU::EnableStepping(const bool _bStepping)
 	{
 		// SingleStep so that the "continue", "step over" and "step out" debugger functions
 		// work when the PC is at a breakpoint at the beginning of the block
-		if (PowerPC::breakpoints.IsAddressBreakPoint(PC) && PowerPC::GetMode() != PowerPC::MODE_INTERPRETER)
+		// If watchpoints are enabled, any instruction could be a breakpoint.
+		bool could_be_bp;
+#ifdef ENABLE_MEM_CHECK
+		could_be_bp = true;
+#else
+		could_be_bp = PowerPC::breakpoints.IsAddressBreakPoint(PC);
+#endif
+		if (could_be_bp && PowerPC::GetMode() != PowerPC::MODE_INTERPRETER)
 		{
 			PowerPC::CoreMode oldMode = PowerPC::GetMode();
 			PowerPC::SetMode(PowerPC::MODE_INTERPRETER);
@@ -131,15 +142,15 @@ void CCPU::EnableStepping(const bool _bStepping)
 	}
 }
 
-void CCPU::Break()
+void Break()
 {
 	EnableStepping(true);
 }
 
-bool CCPU::PauseAndLock(bool doLock, bool unpauseOnUnlock)
+bool PauseAndLock(bool do_lock, bool unpause_on_unlock)
 {
 	bool wasUnpaused = !IsStepping();
-	if (doLock)
+	if (do_lock)
 	{
 		// we can't use EnableStepping, that would causes deadlocks with both audio and video
 		PowerPC::Pause();
@@ -148,7 +159,7 @@ bool CCPU::PauseAndLock(bool doLock, bool unpauseOnUnlock)
 	}
 	else
 	{
-		if (unpauseOnUnlock)
+		if (unpause_on_unlock)
 		{
 			PowerPC::Start();
 			m_StepEvent.Set();
@@ -158,4 +169,6 @@ bool CCPU::PauseAndLock(bool doLock, bool unpauseOnUnlock)
 			m_csCpuOccupied.unlock();
 	}
 	return wasUnpaused;
+}
+
 }

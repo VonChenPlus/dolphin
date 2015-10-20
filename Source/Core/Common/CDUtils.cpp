@@ -1,3 +1,7 @@
+// Copyright 2009 Dolphin Emulator Project
+// Licensed under GPLv2+
+// Refer to the license.txt file included.
+
 // Most of the code in this file was shamelessly ripped from libcdio With minor adjustments
 
 #include <algorithm>
@@ -6,6 +10,7 @@
 #include <vector>
 
 #include "Common/CDUtils.h"
+#include "Common/Common.h"
 #include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
 

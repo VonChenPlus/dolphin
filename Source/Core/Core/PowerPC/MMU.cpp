@@ -1,19 +1,6 @@
-// Copyright (C) 2003 Dolphin Project.
-
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, version 2.0.
-
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License 2.0 for more details.
-
-// A copy of the GPL 2.0 should have been included with the program.
-// If not, see http://www.gnu.org/licenses/
-
-// Official Git repository and contact information can be found at
-// https://github.com/dolphin-emu/dolphin
+// Copyright 2003 Dolphin Emulator Project
+// Licensed under GPLv2+
+// Refer to the license.txt file included.
 
 #include "Common/Atomic.h"
 #include "Common/BitSet.h"
@@ -21,6 +8,7 @@
 
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
+#include "Core/HW/CPU.h"
 #include "Core/HW/GPFifo.h"
 #include "Core/HW/Memmap.h"
 #include "Core/HW/MMIO.h"
@@ -84,7 +72,11 @@ static u32 EFB_Read(const u32 addr)
 	int x = (addr & 0xfff) >> 2;
 	int y = (addr >> 12) & 0x3ff;
 
-	if (addr & 0x00400000)
+	if (addr & 0x00800000)
+	{
+		ERROR_LOG(MEMMAP, "Unimplemented Z+Color EFB read @ 0x%08x", addr);
+	}
+	else if (addr & 0x00400000)
 	{
 		var = g_video_backend->Video_AccessEFB(PEEK_Z, x, y, 0);
 		DEBUG_LOG(MEMMAP, "EFB Z Read @ %i, %i\t= 0x%08x", x, y, var);
@@ -103,7 +95,13 @@ static void EFB_Write(u32 data, u32 addr)
 	int x = (addr & 0xfff) >> 2;
 	int y = (addr >> 12) & 0x3ff;
 
-	if (addr & 0x00400000)
+	if (addr & 0x00800000)
+	{
+		// It's possible to do a z-tested write to EFB by writing a 64bit value to this address range.
+		// Not much is known, but let's at least get some loging.
+		ERROR_LOG(MEMMAP, "Unimplemented Z+Color EFB write. %08x @ 0x%08x", data, addr);
+	}
+	else if (addr & 0x00400000)
 	{
 		g_video_backend->Video_AccessEFB(POKE_Z, x, y, data);
 		DEBUG_LOG(MEMMAP, "EFB Z Write %08x @ %i, %i", data, x, y);
@@ -237,15 +235,17 @@ __forceinline static void WriteToHardware(u32 em_address, const T data)
 	if (!BitSet32(0xCFC)[segment] && performTranslation)
 	{
 		// First, let's check for FIFO writes, since they are probably the most common
-		// reason we end up in this function:
+		// reason we end up in this function.
+		// Note that we must mask the address to correctly emulate certain games;
+		// Pac-Man World 3 in particular is affected by this.
 		if (flag == FLAG_WRITE && (em_address & 0xFFFFF000) == 0xCC008000)
 		{
 			switch (sizeof(T))
 			{
-			case 1: GPFifo::Write8((u8)data, em_address); return;
-			case 2: GPFifo::Write16((u16)data, em_address); return;
-			case 4: GPFifo::Write32((u32)data, em_address); return;
-			case 8: GPFifo::Write64((u64)data, em_address); return;
+			case 1: GPFifo::Write8((u8)data); return;
+			case 2: GPFifo::Write16((u16)data); return;
+			case 4: GPFifo::Write32((u32)data); return;
+			case 8: GPFifo::Write64((u64)data); return;
 			}
 		}
 		if (flag == FLAG_WRITE && (em_address & 0xF8000000) == 0xC8000000)
@@ -297,10 +297,10 @@ __forceinline static void WriteToHardware(u32 em_address, const T data)
 		{
 			switch (sizeof(T))
 			{
-			case 1: GPFifo::Write8((u8)data, em_address); return;
-			case 2: GPFifo::Write16((u16)data, em_address); return;
-			case 4: GPFifo::Write32((u32)data, em_address); return;
-			case 8: GPFifo::Write64((u64)data, em_address); return;
+			case 1: GPFifo::Write8((u8)data); return;
+			case 2: GPFifo::Write16((u16)data); return;
+			case 4: GPFifo::Write32((u32)data); return;
+			case 8: GPFifo::Write64((u64)data); return;
 			}
 		}
 		if (flag == FLAG_WRITE && (em_address & 0xF8000000) == 0x08000000)
@@ -396,7 +396,7 @@ TryReadInstResult TryReadInstruction(u32 address)
 	if (UReg_MSR(MSR).IR)
 	{
 		// TODO: Use real translation.
-		if (SConfig::GetInstance().m_LocalCoreStartupParameter.bMMU && (address & Memory::ADDR_MASK_MEM1))
+		if (SConfig::GetInstance().bMMU && (address & Memory::ADDR_MASK_MEM1))
 		{
 			u32 tlb_addr = TranslateAddress<FLAG_OPCODE>(address);
 			if (tlb_addr == 0)
@@ -453,8 +453,25 @@ static __forceinline void Memcheck(u32 address, u32 var, bool write, int size)
 	TMemCheck *mc = PowerPC::memchecks.GetMemCheck(address);
 	if (mc)
 	{
+		if (CPU::IsStepping())
+		{
+			// Disable when stepping so that resume works.
+			return;
+		}
 		mc->numHits++;
-		mc->Action(&PowerPC::debug_interface, var, address, write, size, PC);
+		bool pause = mc->Action(&PowerPC::debug_interface, var, address, write, size, PC);
+		if (pause)
+		{
+			CPU::Break();
+			// Fake a DSI so that all the code that tests for it in order to skip
+			// the rest of the instruction will apply.  (This means that
+			// watchpoints will stop the emulator before the offending load/store,
+			// not after like GDB does, but that's better anyway.  Just need to
+			// make sure resuming after that works.)
+			// It doesn't matter if ReadFromHardware triggers its own DSI because
+			// we'll take it after resuming.
+			PowerPC::ppcState.Exceptions |= EXCEPTION_DSI | EXCEPTION_FAKE_MEMCHECK_HIT;
+		}
 	}
 #endif
 }
@@ -620,6 +637,7 @@ std::string HostGetString(u32 address, size_t size)
 		u8 res = HostRead_U8(address);
 		if (!res)
 			break;
+		s += static_cast<char>(res);
 		++address;
 	} while (size == 0 || s.length() < size);
 	return s;
@@ -627,6 +645,10 @@ std::string HostGetString(u32 address, size_t size)
 
 bool IsOptimizableRAMAddress(const u32 address)
 {
+#ifdef ENABLE_MEM_CHECK
+	return false;
+#endif
+
 	if (!UReg_MSR(MSR).DR)
 		return false;
 
@@ -750,6 +772,10 @@ void ClearCacheLine(const u32 address)
 
 u32 IsOptimizableMMIOAccess(u32 address, u32 accessSize)
 {
+#ifdef ENABLE_MEM_CHECK
+	return 0;
+#endif
+
 	if (!UReg_MSR(MSR).DR)
 		return 0;
 
@@ -765,6 +791,10 @@ u32 IsOptimizableMMIOAccess(u32 address, u32 accessSize)
 
 bool IsOptimizableGatherPipeWrite(u32 address)
 {
+#ifdef ENABLE_MEM_CHECK
+	return false;
+#endif
+
 	if (!UReg_MSR(MSR).DR)
 		return false;
 
@@ -867,9 +897,9 @@ union UPTE2
 static void GenerateDSIException(u32 effectiveAddress, bool write)
 {
 	// DSI exceptions are only supported in MMU mode.
-	if (!SConfig::GetInstance().m_LocalCoreStartupParameter.bMMU)
+	if (!SConfig::GetInstance().bMMU)
 	{
-		PanicAlertT("Invalid %s to 0x%08x, PC = 0x%08x ", write ? "Write to" : "Read from", effectiveAddress, PC);
+		PanicAlert("Invalid %s 0x%08x, PC = 0x%08x ", write ? "write to" : "read from", effectiveAddress, PC);
 		return;
 	}
 

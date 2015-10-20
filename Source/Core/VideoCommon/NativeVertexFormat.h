@@ -1,13 +1,15 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #pragma once
 
+#include <cstring>
 #include <functional> // for hash
 
-#include "Common/Common.h"
+#include "Common/CommonTypes.h"
 #include "Common/Hash.h"
+#include "Common/NonCopyable.h"
 
 // m_components
 enum

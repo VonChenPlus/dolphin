@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include <algorithm>
@@ -8,14 +8,15 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
+#include "Common/Assert.h"
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/MathUtil.h"
-#include "Core/VolumeHandler.h"
+#include "Common/Logging/Log.h"
+#include "DiscIO/Blob.h"
 #include "DiscIO/FileBlob.h"
 #include "DiscIO/FileMonitor.h"
 #include "DiscIO/Volume.h"
@@ -184,9 +185,22 @@ std::string CVolumeDirectory::GetMakerID() const
 	return "VOID";
 }
 
-std::vector<std::string> CVolumeDirectory::GetNames() const
+std::string CVolumeDirectory::GetInternalName() const
 {
-	return std::vector<std::string>(1, (char*)(&m_diskHeader[0x20]));
+	char name[0x60];
+	if (Read(0x20, 0x60, (u8*)name, false))
+		return DecodeString(name);
+	else
+		return "";
+}
+
+std::map<IVolume::ELanguage, std::string> CVolumeDirectory::GetNames(bool prefer_long) const
+{
+	std::map<IVolume::ELanguage, std::string> names;
+	std::string name = GetInternalName();
+	if (!name.empty())
+		names[IVolume::ELanguage::LANGUAGE_UNKNOWN] = name;
+	return names;
 }
 
 void CVolumeDirectory::SetName(const std::string& name)
@@ -199,7 +213,7 @@ void CVolumeDirectory::SetName(const std::string& name)
 	m_diskHeader[length + 0x20] = 0;
 }
 
-u32 CVolumeDirectory::GetFSTSize() const
+u64 CVolumeDirectory::GetFSTSize() const
 {
 	return 0;
 }
@@ -209,9 +223,17 @@ std::string CVolumeDirectory::GetApploaderDate() const
 	return "VOID";
 }
 
-bool CVolumeDirectory::IsWiiDisc() const
+IVolume::EPlatform CVolumeDirectory::GetVolumeType() const
 {
-	return m_is_wii;
+	return m_is_wii ? WII_DISC : GAMECUBE_DISC;
+}
+
+BlobType CVolumeDirectory::GetBlobType() const
+{
+	// VolumeDirectory isn't actually a blob, but it sort of acts
+	// like one, so it makes sense that it has its own blob type.
+	// It should be made into a proper blob in the future.
+	return BlobType::DIRECTORY;
 }
 
 u64 CVolumeDirectory::GetSize() const
@@ -328,7 +350,7 @@ void CVolumeDirectory::BuildFST()
 	File::FSTEntry rootEntry;
 
 	// read data from physical disk to rootEntry
-	u32 totalEntries = AddDirectoryEntries(m_rootDirectory, rootEntry) + 1;
+	u64 totalEntries = AddDirectoryEntries(m_rootDirectory, rootEntry) + 1;
 
 	m_fstNameOffset = totalEntries * ENTRY_SIZE; // offset in FST nameTable
 	m_FSTData.resize(m_fstNameOffset + m_totalNameSize);
@@ -412,7 +434,7 @@ void CVolumeDirectory::Write32(u32 data, u32 offset, std::vector<u8>* const buff
 	(*buffer)[offset] = (data) & 0xff;
 }
 
-void CVolumeDirectory::WriteEntryData(u32& entryOffset, u8 type, u32 nameOffset, u64 dataOffset, u32 length)
+void CVolumeDirectory::WriteEntryData(u32& entryOffset, u8 type, u32 nameOffset, u64 dataOffset, u64 length)
 {
 	m_FSTData[entryOffset++] = type;
 
@@ -440,7 +462,7 @@ void CVolumeDirectory::WriteEntry(const File::FSTEntry& entry, u32& fstOffset, u
 	{
 		u32 myOffset = fstOffset;
 		u32 myEntryNum = myOffset / ENTRY_SIZE;
-		WriteEntryData(fstOffset, DIRECTORY_ENTRY, nameOffset, parentEntryNum, (u32)(myEntryNum + entry.size + 1));
+		WriteEntryData(fstOffset, DIRECTORY_ENTRY, nameOffset, parentEntryNum, myEntryNum + entry.size + 1);
 		WriteEntryName(nameOffset, entry.virtualName);
 
 		for (const auto& child : entry.children)
@@ -451,15 +473,15 @@ void CVolumeDirectory::WriteEntry(const File::FSTEntry& entry, u32& fstOffset, u
 	else
 	{
 		// put entry in FST
-		WriteEntryData(fstOffset, FILE_ENTRY, nameOffset, dataOffset, (u32)entry.size);
+		WriteEntryData(fstOffset, FILE_ENTRY, nameOffset, dataOffset, entry.size);
 		WriteEntryName(nameOffset, entry.virtualName);
 
 		// write entry to virtual disk
 		_dbg_assert_(DVDINTERFACE, m_virtualDisk.find(dataOffset) == m_virtualDisk.end());
-		m_virtualDisk.insert(make_pair(dataOffset, entry.physicalName));
+		m_virtualDisk.emplace(dataOffset, entry.physicalName);
 
 		// 4 byte aligned
-		dataOffset = ROUND_UP(dataOffset + entry.size, 0x8000ull);
+		dataOffset = ROUND_UP(dataOffset + std::max<u64>(entry.size, 1ull), 0x8000ull);
 	}
 }
 
@@ -479,11 +501,11 @@ static u32 ComputeNameSize(const File::FSTEntry& parentEntry)
 	return nameSize;
 }
 
-u32 CVolumeDirectory::AddDirectoryEntries(const std::string& _Directory, File::FSTEntry& parentEntry)
+u64 CVolumeDirectory::AddDirectoryEntries(const std::string& _Directory, File::FSTEntry& parentEntry)
 {
-	u32 foundEntries = ScanDirectoryTree(_Directory, parentEntry);
+	parentEntry = File::ScanDirectoryTree(_Directory, true);
 	m_totalNameSize += ComputeNameSize(parentEntry);
-	return foundEntries;
+	return parentEntry.size;
 }
 
 } // namespace

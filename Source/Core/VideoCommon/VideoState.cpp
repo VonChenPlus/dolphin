@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include "Common/ChunkFile.h"
@@ -31,7 +31,7 @@ static void DoState(PointerWrap &p)
 	p.DoMarker("XF Memory");
 
 	// Texture decoder
-	p.DoArray(texMem, TMEM_SIZE);
+	p.DoArray(texMem);
 	p.DoMarker("texMem");
 
 	// FIFO

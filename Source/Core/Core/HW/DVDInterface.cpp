@@ -1,18 +1,21 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include <cinttypes>
 #include <cmath>
+#include <memory>
+#include <string>
 
 #include "AudioCommon/AudioCommon.h"
 
+#include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
+#include "Common/MathUtil.h"
 
 #include "Core/ConfigManager.h"
 #include "Core/CoreTiming.h"
 #include "Core/Movie.h"
-#include "Core/VolumeHandler.h"
 #include "Core/HW/AudioInterface.h"
 #include "Core/HW/DVDInterface.h"
 #include "Core/HW/Memmap.h"
@@ -21,6 +24,9 @@
 #include "Core/HW/StreamADPCM.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/PowerPC/PowerPC.h"
+
+#include "DiscIO/Volume.h"
+#include "DiscIO/VolumeCreator.h"
 
 static const double PI = 3.14159265358979323846264338328;
 
@@ -229,6 +235,7 @@ struct DVDReadCommand
 	int callback_event_type;
 };
 
+static std::unique_ptr<DiscIO::IVolume> s_inserted_volume;
 
 // STATE_TO_SAVE
 // hardware registers
@@ -286,7 +293,7 @@ void DoState(PointerWrap &p)
 {
 	p.DoPOD(m_DISR);
 	p.DoPOD(m_DICVR);
-	p.DoArray(m_DICMDBUF, 3);
+	p.DoArray(m_DICMDBUF);
 	p.Do(m_DIMAR);
 	p.Do(m_DILENGTH);
 	p.Do(m_DICR);
@@ -326,7 +333,7 @@ static void FinishExecuteReadCommand(u64 userdata, int cyclesLate)
 {
 	if (!current_read_command.is_valid)
 	{
-		PanicAlertT("DVDInterface tried to execute non-existing command");
+		PanicAlert("DVDInterface: There is no command to execute!");
 	}
 	else
 	{
@@ -368,15 +375,15 @@ static u32 ProcessDTKSamples(short *tempPCM, u32 num_samples)
 				break;
 			}
 
-			NGCADPCM::InitFilter();
+			StreamADPCM::InitFilter();
 		}
 
-		u8 tempADPCM[NGCADPCM::ONE_BLOCK_SIZE];
+		u8 tempADPCM[StreamADPCM::ONE_BLOCK_SIZE];
 		// TODO: What if we can't read from AudioPos?
-		VolumeHandler::ReadToPtr(tempADPCM, AudioPos, sizeof(tempADPCM), false);
+		s_inserted_volume->Read(AudioPos, sizeof(tempADPCM), tempADPCM, false);
 		AudioPos += sizeof(tempADPCM);
-		NGCADPCM::DecodeBlock(tempPCM + samples_processed * 2, tempADPCM);
-		samples_processed += NGCADPCM::SAMPLES_PER_BLOCK;
+		StreamADPCM::DecodeBlock(tempPCM + samples_processed * 2, tempADPCM);
+		samples_processed += StreamADPCM::SAMPLES_PER_BLOCK;
 	} while (samples_processed < num_samples);
 	for (unsigned i = 0; i < samples_processed * 2; ++i)
 	{
@@ -449,6 +456,29 @@ void Init()
 
 void Shutdown()
 {
+	s_inserted_volume.reset();
+}
+
+const DiscIO::IVolume& GetVolume()
+{
+	return *s_inserted_volume;
+}
+
+bool SetVolumeName(const std::string& disc_path)
+{
+	s_inserted_volume = std::unique_ptr<DiscIO::IVolume>(DiscIO::CreateVolumeFromFilename(disc_path));
+	return VolumeIsValid();
+}
+
+bool SetVolumeDirectory(const std::string& full_path, bool is_wii, const std::string& apploader_path, const std::string& DOL_path)
+{
+	s_inserted_volume = std::unique_ptr<DiscIO::IVolume>(DiscIO::CreateVolumeFromDirectory(full_path, is_wii, apploader_path, DOL_path));
+	return VolumeIsValid();
+}
+
+bool VolumeIsValid()
+{
+	return s_inserted_volume != nullptr;
 }
 
 void SetDiscInside(bool _DiscInside)
@@ -472,21 +502,21 @@ void EjectDiscCallback(u64 userdata, int cyclesLate)
 {
 	// Empty the drive
 	SetDiscInside(false);
-	VolumeHandler::EjectVolume();
+	s_inserted_volume.reset();
 }
 
 void InsertDiscCallback(u64 userdata, int cyclesLate)
 {
-	std::string& SavedFileName = SConfig::GetInstance().m_LocalCoreStartupParameter.m_strFilename;
+	std::string& SavedFileName = SConfig::GetInstance().m_strFilename;
 	std::string *_FileName = (std::string *)userdata;
 
-	if (!VolumeHandler::SetVolumeName(*_FileName))
+	if (!SetVolumeName(*_FileName))
 	{
 		// Put back the old one
-		VolumeHandler::SetVolumeName(SavedFileName);
+		SetVolumeName(SavedFileName);
 		PanicAlertT("Invalid file");
 	}
-	SetDiscInside(VolumeHandler::IsValid());
+	SetDiscInside(VolumeIsValid());
 	delete _FileName;
 }
 
@@ -503,7 +533,8 @@ void ChangeDisc(const std::string& newFileName)
 		auto sizeofpath = fileName.find_last_of("/\\") + 1;
 		if (fileName.substr(sizeofpath).length() > 40)
 		{
-			PanicAlert("Saving iso filename to .dtm failed; max file name length is 40 characters.");
+			PanicAlertT("The disc change to \"%s\" could not be saved in the .dtm file.\n"
+			            "The filename of the disc image must not be longer than 40 characters.", newFileName.c_str());
 		}
 		Movie::g_discChange = fileName.substr(sizeofpath);
 	}
@@ -518,7 +549,12 @@ void SetLidOpen(bool _bOpen)
 
 bool DVDRead(u64 _iDVDOffset, u32 _iRamAddress, u32 _iLength, bool decrypt)
 {
-	return VolumeHandler::ReadToPtr(Memory::GetPointer(_iRamAddress), _iDVDOffset, _iLength, decrypt);
+	return s_inserted_volume->Read(_iDVDOffset, _iLength, Memory::GetPointer(_iRamAddress), decrypt);
+}
+
+bool ChangePartition(u64 offset)
+{
+	return s_inserted_volume->ChangePartition(offset);
 }
 
 void RegisterMMIO(MMIO::Mapping* mmio, u32 base)
@@ -668,8 +704,9 @@ DVDReadCommand ExecuteReadCommand(u64 DVD_offset, u32 output_address, u32 DVD_le
 		DVD_length = output_length;
 	}
 
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bFastDiscSpeed)
-		*ticks_until_completion = 0;	// An optional hack to speed up loading times
+	if (SConfig::GetInstance().bFastDiscSpeed)
+		// An optional hack to speed up loading times
+		*ticks_until_completion = output_length * (SystemTimers::GetTicksPerSecond() / BUFFER_TRANSFER_RATE);
 	else
 		*ticks_until_completion = SimulateDiscReadTime(DVD_offset, DVD_length);
 
@@ -1147,7 +1184,7 @@ void ExecuteCommand(u32 command_0, u32 command_1, u32 command_2, u32 output_addr
 						CurrentStart = NextStart;
 						CurrentLength = NextLength;
 						AudioPos = CurrentStart;
-						NGCADPCM::InitFilter();
+						StreamADPCM::InitFilter();
 						g_bStream = true;
 					}
 				}
@@ -1361,7 +1398,7 @@ u64 SimulateDiscReadTime(u64 offset, u32 length)
 		}
 	}
 
-	g_last_read_offset = (offset + length - 2048) & ~2047;
+	g_last_read_offset = ROUND_DOWN(offset + length - 2048, 2048);
 
 	return ticks_until_completion;
 }
@@ -1398,7 +1435,7 @@ s64 CalculateRawDiscReadTime(u64 offset, s64 length)
 	// Note that the speed at a track (in bytes per second) is the same as
 	// the radius of that track because of the length unit used.
 	double speed;
-	if (VolumeHandler::IsWiiDisc())
+	if (s_inserted_volume->GetVolumeType() == DiscIO::IVolume::WII_DISC)
 	{
 		speed = std::sqrt(((average_offset - WII_DISC_LOCATION_1_OFFSET) /
 			WII_BYTES_PER_AREA_UNIT + WII_DISC_AREA_UP_TO_LOCATION_1) / PI);

@@ -1,10 +1,11 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2009 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include <string>
 
 #include "Common/StringUtil.h"
+#include "Common/Logging/Log.h"
 #include "Core/HW/SI_Device.h"
 #include "Core/HW/SI_DeviceAMBaseboard.h"
 #include "Core/HW/SI_DeviceDanceMat.h"
@@ -39,6 +40,10 @@ int ISIDevice::RunBuffer(u8* _pBuffer, int _iLength)
 	return 0;
 }
 
+int ISIDevice::TransferInterval()
+{
+	return 0;
+}
 
 // Stub class for saying nothing is attached, and not having to deal with null pointers :)
 class CSIDevice_Null : public ISIDevice

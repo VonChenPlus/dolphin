@@ -1,5 +1,5 @@
 // Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include <cfenv>
@@ -18,7 +18,7 @@ namespace FPURoundMode
 	void SetRoundMode(int mode)
 	{
 		// Convert PowerPC to native rounding mode.
-		const int rounding_mode_lut[] = {
+		static const int rounding_mode_lut[] = {
 			FE_TONEAREST,
 			FE_TOWARDZERO,
 			FE_UPWARD,
@@ -42,9 +42,9 @@ namespace FPURoundMode
 		static const u32 simd_rounding_table[] =
 		{
 			(0 << 13) | EXCEPTION_MASK, // nearest
-			(3 << 13) | EXCEPTION_MASK, // -inf
+			(3 << 13) | EXCEPTION_MASK, // zero
 			(2 << 13) | EXCEPTION_MASK, // +inf
-			(1 << 13) | EXCEPTION_MASK, // zero
+			(1 << 13) | EXCEPTION_MASK, // -inf
 		};
 		u32 csr = simd_rounding_table[rounding_mode];
 

@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #pragma once
@@ -37,8 +37,6 @@
 #define GX_DRAW_LINES               0x5   // 0xA8
 #define GX_DRAW_LINE_STRIP          0x6   // 0xB0
 #define GX_DRAW_POINTS              0x7   // 0xB8
-
-extern bool g_bRecordFifoData;
 
 void OpcodeDecoder_Init();
 void OpcodeDecoder_Shutdown();

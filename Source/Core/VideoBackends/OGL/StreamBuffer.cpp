@@ -1,10 +1,10 @@
 // Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include "Common/MemoryUtil.h"
+#include "Common/GL/GLUtil.h"
 
-#include "VideoBackends/OGL/GLUtil.h"
 #include "VideoBackends/OGL/Render.h"
 #include "VideoBackends/OGL/StreamBuffer.h"
 

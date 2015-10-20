@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2010 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #pragma once
@@ -11,22 +11,16 @@
 #include <wx/button.h>
 #include <wx/checkbox.h>
 #include <wx/choice.h>
-#include <wx/defs.h>
 #include <wx/dialog.h>
-#include <wx/event.h>
 #include <wx/msgdlg.h>
 #include <wx/radiobut.h>
 #include <wx/spinctrl.h>
 #include <wx/stattext.h>
-#include <wx/string.h>
-#include <wx/translation.h>
-#include <wx/window.h>
 
 #include "Common/CommonTypes.h"
 #include "Common/SysConf.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
-#include "Core/CoreParameter.h"
 #include "DolphinWX/PostProcessingConfigDiag.h"
 #include "DolphinWX/WxUtils.h"
 #include "VideoCommon/PostProcessing.h"
@@ -108,7 +102,7 @@ protected:
 				Close();
 
 				g_video_backend = new_backend;
-				SConfig::GetInstance().m_LocalCoreStartupParameter.m_strVideoBackend = g_video_backend->GetName();
+				SConfig::GetInstance().m_strVideoBackend = g_video_backend->GetName();
 
 				g_video_backend->ShowConfig(GetParent());
 			}
@@ -128,7 +122,7 @@ protected:
 	void Event_ProgressiveScan(wxCommandEvent &ev)
 	{
 		SConfig::GetInstance().m_SYSCONF->SetData("IPL.PGS", ev.GetInt());
-		SConfig::GetInstance().m_LocalCoreStartupParameter.bProgressive = ev.IsChecked();
+		SConfig::GetInstance().bProgressive = ev.IsChecked();
 
 		ev.Skip();
 	}
@@ -199,10 +193,15 @@ protected:
 		// Anti-aliasing
 		choice_aamode->Enable(vconfig.backend_info.AAModes.size() > 1);
 		text_aamode->Enable(vconfig.backend_info.AAModes.size() > 1);
+		ssaa_checkbox->Enable(vconfig.backend_info.bSupportsSSAA && vconfig.iMultisampleMode > 0);
+
 
 		// XFB
 		virtual_xfb->Enable(vconfig.bUseXFB);
 		real_xfb->Enable(vconfig.bUseXFB);
+
+		// custom textures
+		cache_hires_textures->Enable(vconfig.bHiresTextures);
 
 		// Repopulating the post-processing shaders can't be done from an event
 		if (choice_ppshader && choice_ppshader->IsEmpty())
@@ -246,6 +245,8 @@ protected:
 	void Evt_LeaveControl(wxMouseEvent& ev);
 	void CreateDescriptionArea(wxPanel* const page, wxBoxSizer* const sizer);
 	void PopulatePostProcessingShaders();
+	void OnSSAAClick(wxCommandEvent& event);
+	void RefreshAAList();
 
 	wxChoice* choice_backend;
 	wxChoice* choice_adapter;
@@ -256,6 +257,7 @@ protected:
 
 	wxStaticText* text_aamode;
 	SettingChoice* choice_aamode;
+	wxCheckBox* ssaa_checkbox;
 
 	wxStaticText* label_display_resolution;
 
@@ -266,6 +268,8 @@ protected:
 
 	SettingRadioButton* virtual_xfb;
 	SettingRadioButton* real_xfb;
+
+	SettingCheckBox* cache_hires_textures;
 
 	wxCheckBox* progressive_scan_checkbox;
 

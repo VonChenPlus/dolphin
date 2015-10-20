@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 
@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
+#include "Common/IniFile.h"
 #include "Common/StringUtil.h"
 #include "Common/Logging/LogManager.h"
 
@@ -104,7 +105,7 @@ struct ARAddr
 void LoadCodes(const IniFile& globalIni, const IniFile& localIni, bool forceLoad)
 {
 	// Parses the Action Replay section of a game ini file.
-	if (!SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableCheats &&
+	if (!SConfig::GetInstance().bEnableCheats &&
 		!forceLoad)
 		return;
 
@@ -228,16 +229,14 @@ static void LogInfo(const char *format, ...)
 	{
 		if (LogManager::GetMaxLevel() >= LogTypes::LINFO || logSelf)
 		{
-			char* temp = (char*)alloca(strlen(format)+512);
 			va_list args;
 			va_start(args, format);
-			CharArrayFromFormatV(temp, 512, format, args);
+			std::string text = StringFromFormatV(format, args);
 			va_end(args);
-			INFO_LOG(ACTIONREPLAY, "%s", temp);
+			INFO_LOG(ACTIONREPLAY, "%s", text.c_str());
 
 			if (logSelf)
 			{
-				std::string text = temp;
 				text += '\n';
 				arLog.push_back(text);
 			}
@@ -255,7 +254,7 @@ ARCode GetARCode(size_t index)
 	if (index > arCodes.size())
 	{
 		PanicAlertT("GetARCode: Index is greater than "
-			"ar code list size %lu", (unsigned long)index);
+			"ar code list size %zu", index);
 		return ARCode();
 	}
 	return arCodes[index];
@@ -266,7 +265,7 @@ void SetARCode_IsActive(bool active, size_t index)
 	if (index > arCodes.size())
 	{
 		PanicAlertT("SetARCode_IsActive: Index is greater than "
-			"ar code list size %lu", (unsigned long)index);
+			"ar code list size %zu", index);
 		return;
 	}
 	arCodes[index].active = active;
@@ -275,8 +274,8 @@ void SetARCode_IsActive(bool active, size_t index)
 
 void UpdateActiveList()
 {
-	bool old_value = SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableCheats;
-	SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableCheats = false;
+	bool old_value = SConfig::GetInstance().bEnableCheats;
+	SConfig::GetInstance().bEnableCheats = false;
 	b_RanOnce = false;
 	activeCodes.clear();
 	for (auto& arCode : arCodes)
@@ -284,7 +283,7 @@ void UpdateActiveList()
 		if (arCode.active)
 			activeCodes.push_back(arCode);
 	}
-	SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableCheats = old_value;
+	SConfig::GetInstance().bEnableCheats = old_value;
 }
 
 void EnableSelfLogging(bool enable)
@@ -759,7 +758,7 @@ static bool ConditionalCode(const ARAddr& addr, const u32 data, int* const pSkip
 
 void RunAllActive()
 {
-	if (SConfig::GetInstance().m_LocalCoreStartupParameter.bEnableCheats)
+	if (SConfig::GetInstance().bEnableCheats)
 	{
 		for (auto& activeCode : activeCodes)
 		{
@@ -789,7 +788,7 @@ bool RunCode(const ARCode &arcode)
 	current_code = &arcode;
 
 	LogInfo("Code Name: %s", arcode.name.c_str());
-	LogInfo("Number of codes: %i", arcode.ops.size());
+	LogInfo("Number of codes: %zu", arcode.ops.size());
 
 	for (const AREntry& entry : arcode.ops)
 	{

@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include <algorithm>
@@ -63,7 +63,7 @@ GekkoOPInfo *GetOpInfo(UGeckoInstruction _inst)
 	}
 }
 
-Interpreter::_interpreterInstruction GetInterpreterOp(UGeckoInstruction _inst)
+Interpreter::Instruction GetInterpreterOp(UGeckoInstruction _inst)
 {
 	const GekkoOPInfo *info = m_infoTable[_inst.OPCD];
 	if ((info->type & 0xFFFFFF) == OPTYPE_SUBTABLE)
@@ -162,7 +162,6 @@ void PrintInstructionRunCounts()
 			break;
 
 		DEBUG_LOG(POWERPC, "%s : %" PRIu64, inst.first, inst.second);
-		//PanicAlert("%s : %llu", inst.first, inst.second);
 	}
 }
 

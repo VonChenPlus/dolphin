@@ -1,15 +1,20 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2009 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include <algorithm>
 #include <cstddef>
+#include <cstring>
+#include <map>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Common/MathUtil.h"
+#include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
+#include "Common/Logging/Log.h"
 #include "DiscIO/Blob.h"
 #include "DiscIO/Volume.h"
 #include "DiscIO/VolumeWad.h"
@@ -18,8 +23,8 @@
 
 namespace DiscIO
 {
-CVolumeWAD::CVolumeWAD(IBlobReader* _pReader)
-	: m_pReader(_pReader), m_offset(0), m_tmd_offset(0), m_opening_bnr_offset(0),
+CVolumeWAD::CVolumeWAD(std::unique_ptr<IBlobReader> reader)
+	: m_pReader(std::move(reader)), m_offset(0), m_tmd_offset(0), m_opening_bnr_offset(0),
 	m_hdr_size(0), m_cert_size(0), m_tick_size(0), m_tmd_size(0), m_data_size(0)
 {
 	// Source: http://wiibrew.org/wiki/WAD_files
@@ -70,40 +75,37 @@ IVolume::ECountry CVolumeWAD::GetCountry() const
 
 std::string CVolumeWAD::GetUniqueID() const
 {
-	std::string temp = GetMakerID();
-
-	char GameCode[8];
+	char GameCode[6];
 	if (!Read(m_offset + 0x01E0, 4, (u8*)GameCode))
 		return "0";
 
+	std::string temp = GetMakerID();
 	GameCode[4] = temp.at(0);
 	GameCode[5] = temp.at(1);
-	GameCode[6] = 0;
 
-	return GameCode;
+	return DecodeString(GameCode);
 }
 
 std::string CVolumeWAD::GetMakerID() const
 {
-	char temp[3] = {1};
+	char temp[2] = {1};
 	// Some weird channels use 0x0000 in place of the MakerID, so we need a check there
 	if (!Read(0x198 + m_tmd_offset, 2, (u8*)temp) || temp[0] == 0 || temp[1] == 0)
 		return "00";
 
-	temp[2] = 0;
-
-	return temp;
+	return DecodeString(temp);
 }
 
-bool CVolumeWAD::GetTitleID(u8* _pBuffer) const
+bool CVolumeWAD::GetTitleID(u64* buffer) const
 {
-	if (!Read(m_offset + 0x01DC, 8, _pBuffer))
+	if (!Read(m_offset + 0x01DC, sizeof(u64), reinterpret_cast<u8*>(buffer)))
 		return false;
 
+	*buffer = Common::swap64(*buffer);
 	return true;
 }
 
-int CVolumeWAD::GetRevision() const
+u16 CVolumeWAD::GetRevision() const
 {
 	u16 revision;
 	if (!m_pReader->Read(m_tmd_offset + 0x1dc, 2, (u8*)&revision))
@@ -112,47 +114,22 @@ int CVolumeWAD::GetRevision() const
 	return Common::swap16(revision);
 }
 
-bool CVolumeWAD::IsWadFile() const
+IVolume::EPlatform CVolumeWAD::GetVolumeType() const
 {
-	return true;
+	return WII_WAD;
 }
 
-std::vector<std::string> CVolumeWAD::GetNames() const
+std::map<IVolume::ELanguage, std::string> CVolumeWAD::GetNames(bool prefer_long) const
 {
-	std::vector<std::string> names;
+	std::vector<u8> name_data(NAMES_TOTAL_BYTES);
+	if (!Read(m_opening_bnr_offset + 0x9C, NAMES_TOTAL_BYTES, name_data.data()))
+		return std::map<IVolume::ELanguage, std::string>();
+	return ReadWiiNames(name_data);
+}
 
-	u32 footer_size;
-	if (!Read(0x1C, 4, (u8*)&footer_size))
-	{
-		return names;
-	}
-
-	footer_size = Common::swap32(footer_size);
-
-	//Japanese, English, German, French, Spanish, Italian, Dutch, unknown, unknown, Korean
-	for (int i = 0; i != 10; ++i)
-	{
-		static const u32 string_length = 42;
-		static const u32 bytes_length = string_length * sizeof(u16);
-
-		u16 temp[string_length];
-
-		if (footer_size < 0xF1 || !Read(0x9C + (i * bytes_length) + m_opening_bnr_offset, bytes_length, (u8*)&temp))
-		{
-			names.push_back("");
-		}
-		else
-		{
-			std::wstring out_temp;
-			out_temp.resize(string_length);
-			std::transform(temp, temp + out_temp.size(), out_temp.begin(), (u16(&)(u16))Common::swap16);
-			out_temp.erase(std::find(out_temp.begin(), out_temp.end(), 0x00), out_temp.end());
-
-			names.push_back(UTF16ToUTF8(out_temp));
-		}
-	}
-
-	return names;
+BlobType CVolumeWAD::GetBlobType() const
+{
+	return m_pReader ? m_pReader->GetBlobType() : BlobType::PLAIN;
 }
 
 u64 CVolumeWAD::GetSize() const

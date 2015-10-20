@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2010 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #include <algorithm>
@@ -44,7 +44,7 @@ CISOFileReader* CISOFileReader::Create(const std::string& filename)
 
 u64 CISOFileReader::GetDataSize() const
 {
-	return GetRawSize();
+	return CISO_MAP_SIZE * m_block_size;
 }
 
 u64 CISOFileReader::GetRawSize() const

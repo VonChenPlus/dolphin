@@ -1,5 +1,5 @@
-// Copyright 2013 Dolphin Emulator Project
-// Licensed under GPLv2
+// Copyright 2008 Dolphin Emulator Project
+// Licensed under GPLv2+
 // Refer to the license.txt file included.
 
 #pragma once
@@ -24,20 +24,21 @@
 #include <utility>
 #include <vector>
 
+#include "Common/Assert.h"
+#include "Common/Common.h"
 #include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/Flag.h"
+#include "Common/Logging/Log.h"
 
 // ewww
-#if _LIBCPP_VERSION
+#if _LIBCPP_VERSION || __GNUC__ >= 5
 #define IsTriviallyCopyable(T) std::is_trivially_copyable<typename std::remove_volatile<T>::type>::value
 #elif __GNUC__
 #define IsTriviallyCopyable(T) std::has_trivial_copy_constructor<T>::value
-#elif _MSC_VER >= 1800
-// work around bug
-#define IsTriviallyCopyable(T) (std::is_trivially_copyable<T>::value || std::is_pod<T>::value)
-#elif defined(_MSC_VER)
-#define IsTriviallyCopyable(T) std::has_trivial_copy<T>::value
+#elif _MSC_VER
+// (shuffle2) see https://github.com/dolphin-emu/dolphin/pull/2218
+#define IsTriviallyCopyable(T) 1
 #else
 #error No version of is_trivially_copyable
 #endif
@@ -69,7 +70,6 @@ public:
 
 	void SetMode(Mode mode_) { mode = mode_; }
 	Mode GetMode() const { return mode; }
-	u8** GetPPtr() { return ptr; }
 
 	template <typename K, class V>
 	void Do(std::map<K, V>& x)
@@ -173,12 +173,27 @@ public:
 		DoVoid(x, count * sizeof(T));
 	}
 
+	template <typename T, std::size_t N>
+	void DoArray(T (&arr)[N])
+	{
+		DoArray(arr, static_cast<u32>(N));
+	}
+
 	void Do(Common::Flag& flag)
 	{
 		bool s = flag.IsSet();
 		Do(s);
 		if (mode == MODE_READ)
 			flag.Set(s);
+	}
+
+	template<typename T>
+	void Do(std::atomic<T>& atomic)
+	{
+		T temp = atomic.load();
+		Do(temp);
+		if (mode == MODE_READ)
+			atomic.store(temp);
 	}
 
 	template <typename T>
@@ -219,7 +234,7 @@ public:
 
 		while (true)
 		{
-			u8 shouldExist = (list_cur ? 1 : 0);
+			u8 shouldExist = !!list_cur;
 			Do(shouldExist);
 			if (shouldExist == 1)
 			{
